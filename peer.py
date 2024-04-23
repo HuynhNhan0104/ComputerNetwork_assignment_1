@@ -4,7 +4,7 @@ import json
 import os
 import sys
 import time
-from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_metainfo ,get_file_name_pieces_directory, get_piece_list_of_file
+from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, in_list1_not_list2
 
 class Peer():
     def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces") -> None:
@@ -69,7 +69,7 @@ class Peer():
         file_path = file_path.split(".")
         extension = file_path[1]
         file_name = file_path[0]
-        file_name_list = get_file_name_pieces_directory(self.pieces_storage)
+        file_name_list = get_files_in_pieces_directory(self.pieces_storage)
         return (file_name in file_name_list)
         
     def is_choking(self):
@@ -105,7 +105,15 @@ class Peer():
         with self.peerlist_semaphore:
             print(f"[TRACKER] remove peer {peer} in list tracking")
             self.peer_list.remove(peer)
-        
+    
+    def update_download(self, bytes):
+        with self.download_semaphore:
+            self.download+= bytes
+    
+    def update_upload(self, bytes):
+        with self.upload_semaphore:
+            self.upload+= bytes
+    
     def send_message(self,connection,mess: dict):
         """
         send message on connection to another peer
@@ -156,7 +164,7 @@ class Peer():
                         connection.sendall(b'done')
                         break
                     connection.sendall(data)
-                    # print(sys.getsizeof(data))
+                    self.update_upload(sys.getsizeof(data))
                     
 
             except Exception as e:
@@ -180,6 +188,7 @@ class Peer():
                 if data == b'done':
                     break
                 item.write(data)
+                self.update_download(sys.getsizeof(data))
                 # print(sys.getsizeof(data))
                 
         print(f"finish receive: {out_path}")
@@ -224,7 +233,6 @@ class Peer():
             return response
         
         elif type_message =="getPieces":
-            print("here")
             am_choking = self.is_choking()
             am_interested = self.is_interested()
             if not am_choking:
@@ -279,7 +287,6 @@ class Peer():
             chunk = command.get("chunk")
             name = command.get("file_name")
             for piece in pieces:
-                print(piece)
                 self.send_pieces_file(connection,f"{self.pieces_storage}/{name}/{piece}")
             print("download done")
                  
@@ -298,12 +305,11 @@ class Peer():
         tracker_connection.connect((tracker_ip,tracker_port))
         self.send_message(tracker_connection,message)
         response = self.recieve_message(tracker_connection)
-        print(response)
         peer_list = response.get("peers")
         tracker_connection.close()
         return peer_list
 
-    def getPiecesFromPeers(self,peer_list,file_name):
+    def get_pieces_from_peers(self,peer_list,file_name):
         piece_hold_by_peers = []
         for peer in peer_list:
             peer_connnection = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -326,9 +332,32 @@ class Peer():
         return piece_hold_by_peers
     
         
-    def optimalToDownload(self,piece_hold_by_peers):
-        for i,peer in enumerate(piece_hold_by_peers):
-            pass
+    def plan_to_download(self,piece_hold_by_peers):
+        piece_set = set()
+        planned_download_per_peer = []
+        for item in piece_hold_by_peers:
+            pieces = item.get("pieces")
+            planned_download_per_peer.append({"size":0,"pieces": pieces})
+            piece_set.update(pieces)    
+        min_size = float('inf')
+        pos = 0
+        for piece in piece_set:
+            min_size = float('inf')
+            for idx, item in enumerate(planned_download_per_peer):
+                if piece in item.get("pieces"):
+                    item.get("pieces").remove(piece)
+                    # item["pieces"] =  item.get("pieces").remove(piece)
+                    if item.get("size") < min_size:
+                        min_size = item.get("size")
+                        pos = idx
+            planned_download_per_peer[pos]["size"] += 1
+            planned_download_per_peer[pos]["pieces"].append(piece)
+            
+            
+        for idx, item in enumerate(piece_hold_by_peers):
+            item["pieces"] = planned_download_per_peer[idx]["pieces"]
+        
+        return piece_hold_by_peers
     
     
     def download_pieces(self,address, pieces_list, file_name):
@@ -355,17 +384,19 @@ class Peer():
         extension = file_path[1]
         
         total_length = metainfo.get("info").get("length")
-        peice_list = metainfo.get("info").get("pieces")
-        peice_length = metainfo.get("info").get("piece length")
+        piece_list = metainfo.get("info").get("pieces")
+        piece_length = metainfo.get("info").get("piece length")
         # create directory of file pieces
         if not os.path.exists(f"{self.pieces_storage}/{file_name}"):
             os.makedirs(f"{self.pieces_storage}/{file_name}")
         peer_list = self.get_peer_list_from_tracker(metainfo_path,tracker_ip,tracker_port)
         # print(peer_list)
-        piece_hold_by_peers = self.getPiecesFromPeers(peer_list,file_name)
+        piece_hold_by_peers = self.get_pieces_from_peers(peer_list,file_name)
         # print(piece_hold_by_peers)    
         
-        # piece_hold_by_peers = self.optimalToDownload()
+        piece_hold_by_peers = self.plan_to_download(piece_hold_by_peers)
+        for item in piece_hold_by_peers:
+            print(json.dumps(item,indent=4))
         
         # for peer in piece_hold_by_peers:
         #     self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
@@ -394,6 +425,81 @@ class Peer():
         
 
 
+
+##################################################################################################333
+def plane_to_download(piece_hold_by_peers):
+    piece_set = set()
+    piece_infos = []
+    for item in piece_hold_by_peers:
+        pieces = item.get("pieces")
+        piece_infos.append({"size":0,"pieces": pieces})
+        piece_set.update(pieces)    
+    min_size = float('inf')
+    pos = 0
+    for piece in piece_set:
+        min_size = float('inf')
+        for idx, item in enumerate(piece_infos):
+            if piece in item.get("pieces"):
+                item.get("pieces").remove(piece)
+                # item["pieces"] =  item.get("pieces").remove(piece)
+                if item.get("size") < min_size:
+                    min_size = item.get("size")
+                    pos = idx
+        piece_infos[pos]["size"] += 1
+        piece_infos[pos]["pieces"].append(piece)
+            
+       
+        
+   
+                    
+    
+  
+        
+        
+    
+    
+    # for piece in piece_set:
+        
+        
+    
+    
+    
+    
+    
+    
+        
+    
+    
+    # for i in range( size - 1):
+    #     # print(piece_hold_by_peers[i].get("pieces"))
+    #     for j in range(i+1,size):
+    #         # print(piece_hold_by_peers[j].get("pieces"))
+    #         temp = in_list1_not_list2(piece_hold_by_peers[j].get("pieces"),piece_hold_by_peers[i].get("pieces"))
+    #         # print(temp)
+    #         piece_hold_by_peers[j]["pieces"] = temp
+        
+    
+def test_plane_to_download():
+    piece_hold_by_peers = []
+    piece_list = get_piece_list_of_file("test")
+    scheme = [
+        ["0", "3", "6", "9"],
+        ["1", "3", "5", "7", "9"],
+        ["4", "5", "6" , "7", "8" , "9"]
+    ]
+    for i in range(3):
+        # pieces_of_peer = get_piece_list_of_file("test",f"pieces{i}")
+        pieces_of_peer = scheme[i]
+        element = {
+                "id":i,
+                "ip":"localhost",
+                "port":4040+i,
+                "pieces":pieces_of_peer
+        }
+        piece_hold_by_peers.append(element)
+    plane_to_download(piece_hold_by_peers,"test",piece_list, root="pieces3")
+    
+    
 #####################################################
 def download_peer_test():
     peer = Peer(id=3,port = 4043,pieces_storage="pieces3")
@@ -402,14 +508,14 @@ def download_peer_test():
     
     
 def upload_peer_test():
-    peer = Peer(id=2,port = 4042,pieces_storage="pieces2")
+    peer = Peer(id=1,port = 4041,pieces_storage="pieces1")
     peer.upload_torrent()
     peer.start()
-
-# def test_split_file():
-    # peer = Peer(id=1,port = 4041)
-
-
+    
 if __name__ == "__main__":
     # upload_peer_test()
     download_peer_test()
+    # test_plane_to_download()
+    # l1 = [1,2,3,4,5,6]
+    # l2 = [1,2,3,8,9,0]
+    # print(inlist1_notlist2(l1,l2))

@@ -109,7 +109,7 @@ def create_metainfo_hashtable(directory):
     return hash_table
             
 ####################################
-def get_file_name_pieces_directory(pieces_root = "pieces"):
+def get_files_in_pieces_directory(pieces_root = "pieces"):
     return os.listdir(pieces_root)      
         
 def get_idx_and_hash_of_piece(piece_path):
@@ -121,10 +121,14 @@ def get_idx_and_hash_of_piece(piece_path):
     return (idx, hash_code)
     
     
-def get_piece_list_of_file( filename,pieces_root = "pieces"):
-    pieces = os.listdir(f"{pieces_root}/{filename}")
-    pieces = sorted(pieces, key=lambda file: int(file.split("_")[0]))
-    return pieces
+def get_piece_list_of_file( filename,pieces_root = "pieces")->list[str]:
+    path = f"{pieces_root}/{filename}"
+    if os.path.exists(path):
+        pieces = os.listdir(path)
+        pieces = sorted(pieces, key=lambda file: int(file.split("_")[0]))
+        return pieces
+    else:
+        return []
     
     
     
@@ -162,7 +166,8 @@ def test_torrent():
 
     create_torrent(file_path, tracker_url, output_file)
     
-    
+def in_list1_not_list2(list1,list2):
+    return [x for x in list1 if (x not in list2)]
 
 if __name__ == "__main__":
     # test_split_file_to_pieces(file_path,"pieces/movie","mv_part")
