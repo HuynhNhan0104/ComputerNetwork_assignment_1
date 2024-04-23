@@ -415,7 +415,7 @@ class Peer():
             thread.join()
             
         # time.sleep(10)
-        merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/mv3.{extension}")
+        merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/{file_name}.{extension}")
         print(f"{self.pieces_storage}/{file_name}")    
         
     def create_upload_alert(self,metainfo_hash,metainfo_name):
@@ -462,7 +462,7 @@ class Peer():
 #####################################################
 def download_peer_test():
     peer = Peer(id=3,port = 4043,pieces_storage="pieces3")
-    peer.download_torrent("metainfo/test.torrent.json")
+    peer.download_torrent("metainfo/walking.torrent.json")
     # peer.start()
     
     
@@ -472,9 +472,9 @@ def upload_peer_test():
     peer.start()
     
 if __name__ == "__main__":
-    upload_peer_test()
+    # upload_peer_test()
     
-    # download_peer_test()
+    download_peer_test()
     # test_plane_to_download()
     # l1 = [1,2,3,4,5,6]
     # l2 = [1,2,3,8,9,0]
