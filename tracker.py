@@ -5,16 +5,18 @@ from utils import create_metainfo_hashtable
 # https://www.geeksforgeeks.org/file-transfer-using-tcp-socket-in-python/
 
 class Tracker:
-    def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024) -> None:
+    def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
         self.ip = "localhost"# socket.gethostbyname(socket.gethostname())
         self.port = port
         self.header_length = header_length
         self.peer_list = set(peer_list)
-        self.semaphore = threading.Semaphore()
+        self.metainfo_storage = metainfo_storage
+        self.peer_list_semaphore = threading.Semaphore()
         self.socket_tracker = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_tracker.bind((self.ip,self.port))
         self.socket_tracker.listen(1)
-        self.metainfo_hashtable = create_metainfo_hashtable("metainfo")
+        self.metainfo_hashtable = create_metainfo_hashtable(self.metainfo_storage)
+        self.metainfo_hashtable_semaphore = threading.Semaphore()
         print(f"[TRACKER] Socket is binded to {self.port}")
     
         
@@ -41,7 +43,7 @@ class Tracker:
             return None
     
     def add_peer(self, peer: tuple)-> None:
-        with self.semaphore:
+        with self.peer_list_semaphore:
             try:
                 print(f"[TRACKER] Add peer {peer} to list tracking")
                 self.peer_list.add(peer)
@@ -50,13 +52,17 @@ class Tracker:
                 
                 
     def remove_peer(self,peer: tuple)-> None:
-        with self.semaphore:
+        with self.peer_list_semaphore:
             try:
                 print(f"[TRACKER] remove peer {peer} in list tracking")
             
                 self.peer_list.discard(peer)
             except Exception as e:
                 print(e)
+    
+    def update_metaifo_hash_table(self,key: str,metainfo_path: str):
+        with self.metainfo_hashtable_semaphore:
+            self.metainfo_hashtable.update({key:metainfo_path})
         
     def send_message(self, connection, mess: dict):
         message = json.dumps(mess)
@@ -71,6 +77,50 @@ class Tracker:
         message_length = int(message_length)
         message = connection.recv(message_length).decode("utf-8")
         return json.loads(message)
+   
+    def send_metainfo_file(self, connection,file_path,chunk= 512*1024):
+        """
+        send all data of file to other peer which is connected with
+
+        Args:
+            connection (socket): connnection to other peer
+            file_path (string): file path of file which need to send
+            chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
+        """
+        with open(file_path,"rb") as item:
+            try:
+                while True:
+                    data = item.read(chunk)
+                    if not data: 
+                        connection.sendall(b'done')
+                        break
+                    connection.sendall(data)
+                    
+
+            except Exception as e:
+                print(e)
+
+        print(f"finish send: {file_path}")
+       
+    def recieve_metainfo_file(self,connection, out_path,chunk=512*1024):
+        """
+        recieve file from other peer which is connected with
+
+        Args:
+            connection (socket):connnection to other peer
+            out_path (str): file output path
+            chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
+            
+        """
+        with open(out_path,"wb") as item:
+            while True:
+                data = connection.recv(chunk)
+                if data == b'done':
+                    break
+                item.write(data)
+                # print(sys.getsizeof(data))
+                
+        print(f"finish receive: {out_path}")
     
     def handle_peer(self, connection, address):
         try:
@@ -98,15 +148,14 @@ class Tracker:
                 # if mess.get("event") == "started":
                 ip = mess.get("ip")
                 port = mess.get("port")
-                info_hash = mess.get("info_hash")
+                metainfo_hash = mess.get("metainfo_hash")
                 # parse metainfo from hash of metainfo
-                meta_info = self.parse_metainfo(info_hash)
+                meta_info = self.parse_metainfo(metainfo_hash)
                 if not meta_info:
                     response = {"action":"error"}
                     return response
                 # send broadcast to ask all peer in list to find who is keept pieces of this file
                 peer_list_response = self.findPeersGetTorrent(meta_info)
-                print(peer_list_response)
                 response = {
                     "action":"response download",
                     "peers": peer_list_response
@@ -115,7 +164,12 @@ class Tracker:
                 
                 
             if mess.get("type") == "upload":
-                response = {"action":"response upload"}
+                self.add_peer((mess.get("ip"),mess.get("port")))
+                response = {
+                    "action":"response upload",
+                    "metainfo_hash": mess.get("metainfo_hash"),
+                    "metainfo_name":mess.get("metainfo_name")
+                }
                 return response
             
             if mess.get("type") == "disconnect":
@@ -144,7 +198,7 @@ class Tracker:
         # self.send_message(connection,"oke")
         if command.get("action") == "accept join":
             response = {
-                "response": "success" if command.get("result") else "failed"
+                "notification": "success" if command.get("result") else "failed"
             }
             self.send_message(connection, response)
             return False
@@ -161,6 +215,23 @@ class Tracker:
             return False
             
         if command.get("action") == "response upload":
+            metainfo_hash = command.get("metainfo_hash")
+            metainfo_name = command.get("metainfo_name")
+            print( metainfo_hash in self.metainfo_hashtable)
+            if metainfo_hash in self.metainfo_hashtable:
+                response = {
+                    "notification": "track was contain this metainfo file",
+                    "hit": True
+                }
+                self.send_message(connection, response)
+            else:
+                response ={
+                    "notification":"tracker want to get this metainfo file",
+                    "hit": False
+                }
+                self.send_message(connection, response)
+                self.recieve_metainfo_file(connection,f"{self.metainfo_storage}/{metainfo_name}",chunk=1024)
+                self.update_metaifo_hash_table(metainfo_hash,f"{self.metainfo_storage}/{metainfo_name}")
             return False
                 
                 

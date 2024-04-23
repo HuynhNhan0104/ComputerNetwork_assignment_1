@@ -44,11 +44,14 @@ def create_torrent(file_path, tracker_url, output_file):
     
 
     # Encode the torrent dictionary using bencode
-    encoded_torrent = bencodepy.encode(torrent_data)
+    # encoded_torrent = bencodepy.encode(torrent_data)
 
     # # Write the encoded torrent data to a file
     with open(output_file, 'w') as f:
         f.write(json.dumps(torrent_data,indent = 4))
+    
+    
+    return create_hash_key_metainfo(output_file)
         
         
         
@@ -106,6 +109,7 @@ def create_metainfo_hashtable(directory):
         key = create_hash_key_metainfo(file_path)
         # print(key)
         hash_table.update({key:file_path})
+    print(hash_table)
     return hash_table
             
 ####################################
@@ -177,6 +181,6 @@ if __name__ == "__main__":
     # create_pieces_directory("input/test.mp4")
     
     # print(get_piece_list_of_file("meeting_1.mp4"))
-    # create_pieces_directory("input/test.mp4")
+    create_pieces_directory("input/test.mp4")
     merge_file_from_pieces("pieces/test",output_file_path="output/mv3.mp4")
     
