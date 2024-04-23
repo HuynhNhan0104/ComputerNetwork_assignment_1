@@ -70,13 +70,14 @@ def split_file_to_pieces(file_path:str,output_pieces_directory: str, file_name_i
 
 def merge_file_from_pieces(file_paths, output_file_path = "output/outputfile.mp4"):
     if os.path.isdir(file_paths):
+        print(f"input folder: {file_paths}")
         file_name_list = os.listdir(file_paths)
         file_name_list = sorted(file_name_list,key = lambda x: int(x.split("_")[0]))
         print(file_name_list)
         
         file_paths = [(file_paths+ "/" + file_name) for file_name in file_name_list]
         # print(file_paths)
-    print("merge file time:")
+    print(f"output file:{output_file_path}")
     with open(output_file_path,"ab") as out:
         for file_path in file_paths:
             with open(file_path,"rb") as item:

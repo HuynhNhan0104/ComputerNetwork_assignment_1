@@ -1,5 +1,5 @@
 {
-    "announce": "169.254.109.192:5050",
+    "announce": "localhost:5050",
     "info": {
         "name": "meeting_1.mp4",
         "length": 360314102,

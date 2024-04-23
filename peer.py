@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 import os
+import sys
 import time
 from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_metainfo ,get_file_name_pieces_directory, get_piece_list_of_file
 
@@ -17,9 +18,9 @@ class Peer():
         self.pieces_storage = pieces_storage
         self.upload = 0
         self.download = 0
-        self.semaphore = threading.Semaphore()
-        self.semaphore_download = threading.Semaphore()
-        
+        self.peerlist_semaphore = threading.Semaphore()
+        self.download_semaphore = threading.Semaphore()
+        self.upload_semaphore = threading.Semaphore()
         self.socket_peer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_peer.bind((self.ip,self.port))
         self.socket_peer.listen(1)
@@ -89,7 +90,7 @@ class Peer():
         Args:
             peer (ip,port): tuple(ip, port ) of peer
         """
-        with self.semaphore:
+        with self.peerlist_semaphore:
             print(f"[TRACKER] Add peer {peer} to list tracking")
             self.peer_list.append(peer)
             
@@ -101,7 +102,7 @@ class Peer():
     
             peer (ip,port): tuple(ip, port ) of peer
         """
-        with self.semaphore:
+        with self.peerlist_semaphore:
             print(f"[TRACKER] remove peer {peer} in list tracking")
             self.peer_list.remove(peer)
         
@@ -152,9 +153,11 @@ class Peer():
                 while True:
                     data = item.read(chunk)
                     if not data: 
+                        connection.sendall(b'done')
                         break
                     connection.sendall(data)
-                connection.sendall(b'done')
+                    # print(sys.getsizeof(data))
+                    
 
             except Exception as e:
                 print(e)
@@ -177,6 +180,8 @@ class Peer():
                 if data == b'done':
                     break
                 item.write(data)
+                # print(sys.getsizeof(data))
+                
         print(f"finish receive: {out_path}")
         
     def handle_peer(self, connection, address):
@@ -327,19 +332,18 @@ class Peer():
     
     
     def download_pieces(self,address, pieces_list, file_name):
-        with self.semaphore_download:
-            peer_connection =  socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-            peer_connection.connect(address)
-            message = {
-                "type": "downloadPieces",
-                "file_name": file_name,
-                "pieces":pieces_list,
-                "chunk": 524288
-            }
-            self.send_message(peer_connection, message)
-            for piece in pieces_list:
-                self.recieve_pieces_file(peer_connection,f"{self.pieces_storage}/{file_name}/{piece}")
-                
+        peer_connection =  socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        peer_connection.connect(address)
+        message = {
+            "type": "downloadPieces",
+            "file_name": file_name,
+            "pieces":pieces_list,
+            "chunk": 524288
+        }
+        self.send_message(peer_connection, message)
+        for piece in pieces_list:
+            self.recieve_pieces_file(peer_connection,f"{self.pieces_storage}/{file_name}/{piece}")
+            
     def download_torrent(self,metainfo_path):
         metainfo = self.parse_metainfo(metainfo_path)
         annouce = metainfo.get("announce")
