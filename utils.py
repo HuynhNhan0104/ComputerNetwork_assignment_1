@@ -20,9 +20,6 @@ def calculate_file_pieces_hash(file_path):
             pieces_hash.append(sha1)
     return pieces_hash
 
-
-
-
 def create_torrent(file_path, tracker_url, output_file):
     # Calculate file hash
     pieces_hash = calculate_file_pieces_hash(file_path)
@@ -72,12 +69,11 @@ def split_file_to_pieces(file_path:str,output_pieces_directory: str, file_name_i
             write_data_file(data,output_pieces_directory+"/" + file_name_index+"_"+str(i))
             i+=1
 
-def merge_file_from_pieces(file_paths, output_file_path = "output/outputfile.mp4"):
+def merge_file_from_pieces(file_paths, output_file_path):
     if os.path.isdir(file_paths):
         print(f"input folder: {file_paths}")
         file_name_list = os.listdir(file_paths)
         file_name_list = sorted(file_name_list,key = lambda x: int(x.split("_")[0]))
-        print(file_name_list)
         
         file_paths = [(file_paths+ "/" + file_name) for file_name in file_name_list]
         # print(file_paths)
@@ -102,7 +98,8 @@ def create_metainfo_hashtable(directory):
     
     files_list =  os.listdir(directory)
     if not files_list:
-        raise(f"[UTILS] Cannot create hashtable because {directory} is emmpty")
+        print(f"[UTILS] Cannot create hashtable because {directory} is emmpty")
+        return {}
     
     for file_name in files_list:
         # print(file)
@@ -171,8 +168,7 @@ def test_torrent():
 
     create_torrent(file_path, tracker_url, output_file)
     
-def in_list1_not_list2(list1,list2):
-    return [x for x in list1 if (x not in list2)]
+
 
 if __name__ == "__main__":
     # test_split_file_to_pieces(file_path,"pieces/movie","mv_part")
@@ -182,6 +178,6 @@ if __name__ == "__main__":
     # create_pieces_directory("input/test.mp4")
     
     # print(get_piece_list_of_file("meeting_1.mp4"))
-    create_pieces_directory("input/test.mp4")
-    merge_file_from_pieces("pieces/test",output_file_path="output/mv3.mp4")
+    # create_pieces_directory("input/test.mp4")
+    merge_file_from_pieces("pieces1/walking",output_file_path="input/walking.mp4")
     

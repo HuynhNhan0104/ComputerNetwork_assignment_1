@@ -11,7 +11,9 @@ class Peer():
         self.tracker_ip = "localhost"
         self.tracker_port= 5050
         self.id = id
-        self.ip = socket.gethostbyname(socket.gethostname())
+        self.ip = "localhost"
+        self.tracker_port= 5050
+        # socket.gethostbyname(socket.gethostname())
         self.port = port
         self.peer_list = peer_list
         self.header_length = header_length
@@ -19,12 +21,15 @@ class Peer():
         self.metainfo_storage = metainfo_storage 
         self.upload = 0
         self.download = 0
+        self.send_file_semaphore = threading.Semaphore() 
+        self.recieve_file_semaphore = threading.Semaphore()
         self.peerlist_semaphore = threading.Semaphore()
         self.download_semaphore = threading.Semaphore()
         self.upload_semaphore = threading.Semaphore()
+        self.write_file_semaphore = threading.Semaphore()
         self.socket_peer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_peer.bind((self.ip,self.port))
-        self.socket_peer.listen(1)
+        self.socket_peer.listen(10)
         print(f"[PEER] Socket is binded to {self.port}")
     
     
@@ -157,6 +162,7 @@ class Peer():
             file_path (string): file path of file which need to send
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
         """
+        # with self.send_file_semaphore:
         with open(file_path,"rb") as item:
             try:
                 while True:
@@ -166,14 +172,15 @@ class Peer():
                         break
                     connection.sendall(data)
                     self.update_upload(sys.getsizeof(data))
+                if connection.recv(chunk) == b'ok':
+                    print(f"[SEND PIECE] send successfully : {file_path}")
                     
 
             except Exception as e:
                 print(e)
 
-        # print(f"finish send: {file_path}")
        
-    def recieve_file(self,connection, out_path,chunk=512*1024):
+    def recieve_file(self,connection, out_path,chunk=512*1024, test = 0):
         """
         recieve file from other peer which is connected with
 
@@ -186,12 +193,13 @@ class Peer():
         with open(out_path,"wb") as item:
             while True:
                 data = connection.recv(chunk)
-                if data == b'done':
+                if data.endswith(b'done'):# == b'done':
+                    connection.sendall(b"ok")
                     break
                 item.write(data)
-                self.update_download(sys.getsizeof(data))
-                # print(sys.getsizeof(data))
-                
+                #self.update_download(sys.getsizeof(data))
+                    # print(sys.getsizeof(data))
+             
         # print(f"finish receive: {out_path}")
         
     def handle_peer(self, connection, address):
@@ -288,7 +296,8 @@ class Peer():
             chunk = command.get("chunk")
             name = command.get("file_name")
             for piece in pieces:
-                self.send_file(connection,f"{self.pieces_storage}/{name}/{piece}")
+                self.send_file(connection,f"{self.pieces_storage}/{name}/{piece}",chunk)
+            print(f"[SEND PIECES] Finished")
                  
         
     def get_peer_list_from_tracker(self, metainfo_path, tracker_ip, tracker_port):
@@ -366,18 +375,18 @@ class Peer():
         return piece_hold_by_peers
     
     
-    def download_pieces(self,address, pieces_list, file_name):
+    def download_pieces(self,address, pieces_list, file_name, chunk = 4*1024):
         peer_connection =  socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         peer_connection.connect(address)
         message = {
             "type": "downloadPieces",
             "file_name": file_name,
             "pieces":pieces_list,
-            "chunk": 524288
+            "chunk": chunk
         }
         self.send_message(peer_connection, message)
         for piece in pieces_list:
-            self.recieve_file(peer_connection,f"{self.pieces_storage}/{file_name}/{piece}")
+            self.recieve_file(peer_connection,f"{self.pieces_storage}/{file_name}/{piece}",chunk)
             
     def download_torrent(self,metainfo_path):
         metainfo = self.parse_metainfo(metainfo_path)
@@ -403,6 +412,7 @@ class Peer():
         
         if sorted(pieces_downloaded) == sorted(piece_list):
             print(f"[DOWNLOAD] Peer is containing full pieces of {file_name}")
+            merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/{file_name}.{extension}")
             return
         peer_list = self.get_peer_list_from_tracker(metainfo_path,tracker_ip,tracker_port)
         # print(peer_list)
@@ -410,32 +420,67 @@ class Peer():
         # print(piece_hold_by_peers)    
         
         piece_hold_by_peers = self.plan_to_download(piece_hold_by_peers)
+        
         # for item in piece_hold_by_peers:
         #     print(json.dumps(item,indent=4))
-        
-        # for peer in piece_hold_by_peers:
-        #     self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
-        
-        thread_list = []
+            
+            
+        if not piece_hold_by_peers:
+            print(f"[DOWNLOAD] Dont get full piece of {file_name} because all peer are not get enough piece ")
+            return
+            
+            
         for peer in piece_hold_by_peers:
-            thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
-            thread_list.append(thread_item)
-            thread_item.start()
+            self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
         
-        for thread in thread_list:
-            thread.join()
+        # thread_list = []
+        # for peer in piece_hold_by_peers:
+        #     thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
+        #     thread_list.append(thread_item)
+        #     thread_item.start()
+        
+        # for thread in thread_list:
+        #     thread.join()
             
             
         
-        # time.sleep(10)
+        print("gone there")
         pieces_downloaded = get_piece_list_of_file(file_name,self.pieces_storage)
         if sorted(pieces_downloaded) == sorted(piece_list):
             print(f"[DOWNLOAD] Get full piece of {file_name} ")
+            # with self.write_file_semaphore:
             merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/{file_name}.{extension}")
-            print(f"{self.pieces_storage}/{file_name}")    
         else:
             print(f"[DOWNLOAD] Dont get full piece of {file_name} therefore cannot merge file")
+        print("_______________________DONE___________________________________")
+        
+        
+        
+        
+    def download_files(self, metainfo_path_list):
+        if isinstance(metainfo_path_list,str):
+            if os.path.isdir(metainfo_path_list):
+                print(f"[DOWNLOAD]input folder: {metainfo_path_list}")
+                file_name_list = os.listdir(metainfo_path_list)
+                file_name_list =  [metainfo_path_list+"/"+ x for x in file_name_list]
+                metainfo_path_list = file_name_list
+            else:
+                metainfo_path_list = [metainfo_path_list]
+            
+        # print(metainfo_path_list)
+        thread_list = []
+        
+        for metainfo_file in metainfo_path_list:
+            # print(metainfo_file)
+            thread = threading.Thread(target=self.download_torrent, args=(metainfo_file,))
+            thread_list.append(thread)
+            thread.start()
+        
+        
+        for thread in thread_list:
+            thread.join()
 
+        
         
     def create_upload_alert(self,metainfo_hash,metainfo_name):
         request = {
@@ -453,12 +498,12 @@ class Peer():
         tracker_connection.connect((self.tracker_ip,self.tracker_port))
         self.send_message(tracker_connection,request)
         response = self.recieve_message(tracker_connection)
-        print(json.dumps(response,indent=4))
+        # print(json.dumps(response,indent=4))
         if not response.get("hit"):
             print(f"[UPLOAD] Sending {metainfo_name} to tracker")
-            self.send_file(tracker_connection,f"{self.metainfo_storage}/{metainfo_name}")
+            self.send_file(tracker_connection,f"{self.metainfo_storage}/{metainfo_name}",chunk=1024)
             
-        print(response.get("notification"))
+        # print(response.get("notification"))
         tracker_connection.close()
 
     def upload_torrent(self,file_share,tracker_address):
@@ -470,26 +515,57 @@ class Peer():
         file_name = os.path.basename(file_share)
         file_name = file_name.split(".")[0] + ".torrent.json"
         output_path = f"{self.metainfo_storage}/{file_name}"
-        print(file_name)
+        # print(file_name)
         metainfo_hash = create_torrent(file_share, f"{tracker_address[0]}:{tracker_address[1]}",output_path)
-        print(str(metainfo_hash))
+        # print(str(metainfo_hash))
         self.create_upload_alert(metainfo_hash,file_name)
         # self.connect_to_tracker()
+   
+   
+    def upload_files(self,file_share_list,tracker_address):
+        if isinstance(file_share_list,str):
+            if os.path.isdir(file_share_list):
+                print(f"[UPLOAD] input folder: {file_share_list}")
+                file_name_list = os.listdir(file_share_list)
+                file_name_list =  [file_share_list+"/"+ x for x in file_name_list]
+                file_share_list = file_name_list
+            else:
+                file_share_list = [file_share_list]
+            
+        # print(file_share_list)
+        thread_list = []
         
+        for file_share in file_share_list:
 
+            thread = threading.Thread(target=self.upload_torrent, args=(file_share,tracker_address))
+            thread_list.append(thread)
+            thread.start()
+        
+        
+        for thread in thread_list:
+            thread.join()
 
-    
+       
+        
 #####################################################
+def upload_peer_test():
+    peer = Peer(id=1,port = 4041,pieces_storage="pieces1",metainfo_storage="metainfo1")
+    list_up = ["input/meeting_1.mp4","input/walking.mp4","input/test.mp4"]
+    peer.upload_files(list_up,("localhost",5050))
+    # peer.upload_torrent("input/meeting_1.mp4", ("localhost",5050))
+    peer.start()
+    
 def download_peer_test():
     peer = Peer(id=3,port = 4043,pieces_storage="pieces3")
-    peer.download_torrent("metainfo/meeting_1.torrent.json")
+    list_down = ["metainfo/walking.torrent.json"]#,"metainfo/test.torrent.json", "metainfo/meeting_1.torrent.json"]
+    # for item in list_down:
+    #     peer.download_torrent(item)
+    # peer.download_files(list_down)
+    peer.download_torrent("metainfo/walking.torrent.json")
+    
     # peer.start()
     
     
-def upload_peer_test():
-    peer = Peer(id=1,port = 4041,pieces_storage="pieces1",metainfo_storage="metainfo1")
-    peer.upload_torrent("input/meeting_1.mp4", ("localhost",5050))
-    peer.start()
     
 if __name__ == "__main__":
     # upload_peer_test()

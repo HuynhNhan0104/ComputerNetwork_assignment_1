@@ -14,7 +14,7 @@ class Tracker:
         self.peer_list_semaphore = threading.Semaphore()
         self.socket_tracker = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_tracker.bind((self.ip,self.port))
-        self.socket_tracker.listen(1)
+        self.socket_tracker.listen(10)
         self.metainfo_hashtable = create_metainfo_hashtable(self.metainfo_storage)
         self.metainfo_hashtable_semaphore = threading.Semaphore()
         print(f"[TRACKER] Socket is binded to {self.port}")
@@ -78,7 +78,7 @@ class Tracker:
         message = connection.recv(message_length).decode("utf-8")
         return json.loads(message)
    
-    def send_metainfo_file(self, connection,file_path,chunk= 512*1024):
+    def send_metainfo_file(self, connection,file_path,chunk= 4*1024):
         """
         send all data of file to other peer which is connected with
 
@@ -102,7 +102,7 @@ class Tracker:
 
         print(f"finish send: {file_path}")
        
-    def recieve_metainfo_file(self,connection, out_path,chunk=512*1024):
+    def recieve_metainfo_file(self,connection, out_path,chunk=4*1024):
         """
         recieve file from other peer which is connected with
 
@@ -191,7 +191,7 @@ class Tracker:
         
     def response_action(self,connection,address,command: dict):
         if (command.get("action") == "response download"):
-            print(json.dumps(command.get("peers"), indent=4))
+            # print(json.dumps(command.get("peers"), indent=4))
             self.send_message(connection, command)
             return False
         # self.send_message(connection,"oke")
@@ -216,7 +216,6 @@ class Tracker:
         if command.get("action") == "response upload":
             metainfo_hash = command.get("metainfo_hash")
             metainfo_name = command.get("metainfo_name")
-            print( metainfo_hash in self.metainfo_hashtable)
             if metainfo_hash in self.metainfo_hashtable:
                 response = {
                     "notification": "track was contain this metainfo file",
