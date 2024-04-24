@@ -430,17 +430,17 @@ class Peer():
             return
             
             
-        for peer in piece_hold_by_peers:
-            self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
-        
-        # thread_list = []
         # for peer in piece_hold_by_peers:
-        #     thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
-        #     thread_list.append(thread_item)
-        #     thread_item.start()
+        #     self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
         
-        # for thread in thread_list:
-        #     thread.join()
+        thread_list = []
+        for peer in piece_hold_by_peers:
+            thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
+            thread_list.append(thread_item)
+            thread_item.start()
+        
+        for thread in thread_list:
+            thread.join()
             
             
         
@@ -557,11 +557,11 @@ def upload_peer_test():
     
 def download_peer_test():
     peer = Peer(id=3,port = 4043,pieces_storage="pieces3")
-    list_down = ["metainfo/walking.torrent.json"]#,"metainfo/test.torrent.json", "metainfo/meeting_1.torrent.json"]
+    list_down = ["metainfo/walking.torrent.json","metainfo/test.torrent.json", "metainfo/meeting_1.torrent.json"]
     # for item in list_down:
     #     peer.download_torrent(item)
-    # peer.download_files(list_down)
-    peer.download_torrent("metainfo/walking.torrent.json")
+    peer.download_files(list_down)
+    # peer.download_torrent("metainfo/walking.torrent.json")
     
     # peer.start()
     
