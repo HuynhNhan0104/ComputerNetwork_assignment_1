@@ -129,7 +129,6 @@ class Tracker:
             while connected:
                 message = self.recieve_message(connection, address)
                 response = self.process_message(message)
-                print("processing messeage is finished ")
                 connected = self.response_action(connection,address, response)    
             connection.close()
         except:
@@ -240,7 +239,7 @@ class Tracker:
     def findPeersGetTorrent(self,metainfo):
         print("[Broadcast] find peers which obtain Torrent pieces in peer list")
         peer_list_for_client = []
-        print(self.peer_list)
+        # print(self.peer_list)
         for peer in self.peer_list:
             print(f"[ASK] Peer {peer} for torrent ")
             client_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -278,28 +277,7 @@ def run():
     tracker = Tracker()
     tracker.start()
     
-    
-    
-def test_client_connect():
-    tracker = Tracker()
-        # tracker.start()
-    tracker.add_peer(("192.168.31.199",4041))
-    tracker.add_peer(("192.168.31.199",4042))
-    
-    meta_info = {
-        "announce": "http://localhost:8080",
-        "info": {
-            "name": "meeting_1.mp4",
-            "length": 360314102,
-            "pieces": [],
-            "piece length": 524288 
-        }
-    }
-    
-    peer_list_response = tracker.findPeersGetTorrent(meta_info)
-    print(peer_list_response)
 if __name__ == "__main__":
-    # test_client_connect()
     run()
        
         

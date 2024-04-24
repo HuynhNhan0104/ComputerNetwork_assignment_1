@@ -26,6 +26,7 @@ def calculate_file_pieces_hash(file_path):
 def create_torrent(file_path, tracker_url, output_file):
     # Calculate file hash
     pieces_hash = calculate_file_pieces_hash(file_path)
+    print(type(pieces_hash))
     # print (str(file_hash))
     # Calculate file size
     file_size = os.path.getsize(file_path)
@@ -37,7 +38,7 @@ def create_torrent(file_path, tracker_url, output_file):
             # "hash": "1",
             "name": os.path.basename(file_path),
             "length": file_size,
-            "pieces": str(pieces_hash),
+            "pieces": pieces_hash,
             "piece length": PIECE_LENGTH  # 512KB piece size
         }
     }
