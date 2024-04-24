@@ -562,18 +562,13 @@ def upload_peer_test():
     peer = Peer(id=1,port = 4041,pieces_storage="pieces1",metainfo_storage="metainfo1")
     list_up = ["input/meeting_1.mp4","input/walking.mp4","input/test.mp4"]
     peer.upload_files(list_up,("localhost",5050))
-    # peer.upload_torrent("input/meeting_1.mp4", ("localhost",5050))
     peer.start()
     
 def download_peer_test():
     peer = Peer(id=2,port = 4042,pieces_storage="pieces2")
     list_down = ["metainfo/walking.torrent.json","metainfo/test.torrent.json", "metainfo/meeting_1.torrent.json"]
-    # for item in list_down:
-    #     peer.download_torrent(item)
     peer.download_files(list_down)
-    # peer.download_torrent("metainfo/walking.torrent.json")
     
-    # peer.start()
 
 
 

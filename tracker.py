@@ -278,21 +278,6 @@ def test_meta_info():
     }  
     tracker.process_message(json.dumps(message))
     
-    
-
-
-# Viết mã argparse ở đây
-
-
-
-
-# parser.add_argument('filenames', nargs='+', help='Danh sách tên file')
-# print(args.Namespace)
-
-# # Mã logic chính của script ở đây
-# for arg in args:
-#     # Xử lý từng file
-#     print(f"Processing file: {arg}")
 
 def main():
     parser = argparse.ArgumentParser(description='Tracker script')
