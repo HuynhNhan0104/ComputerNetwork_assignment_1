@@ -4,10 +4,11 @@ import json
 import os
 import sys
 import time
+import argparse
 from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, create_torrent, create_pieces_directory
 
 class Peer():
-    def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo") -> None:
+    def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
         self.tracker_ip = "localhost"
         self.tracker_port= 5050
         self.id = id
@@ -19,14 +20,23 @@ class Peer():
         self.header_length = header_length
         self.pieces_storage = pieces_storage
         self.metainfo_storage = metainfo_storage 
+        self.output_storage = output_storage
+        
+        if not os.path.exists(self.pieces_storage):
+            os.makedirs(self.pieces_storage)
+            
+        if not os.path.exists(self.metainfo_storage):
+            os.makedirs(self.metainfo_storage)
+            
+        if not os.path.exists(self.output_storage):
+            os.makedirs(self.output_storage)
+            
+            
         self.upload = 0
         self.download = 0
-        self.send_file_semaphore = threading.Semaphore() 
-        self.recieve_file_semaphore = threading.Semaphore()
         self.peerlist_semaphore = threading.Semaphore()
         self.download_semaphore = threading.Semaphore()
         self.upload_semaphore = threading.Semaphore()
-        self.write_file_semaphore = threading.Semaphore()
         self.socket_peer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_peer.bind((self.ip,self.port))
         self.socket_peer.listen(10)
@@ -97,7 +107,7 @@ class Peer():
             peer (ip,port): tuple(ip, port ) of peer
         """
         with self.peerlist_semaphore:
-            print(f"[TRACKER] Add peer {peer} to list tracking")
+            print(f"[PEER] Add peer {peer} to list tracking")
             self.peer_list.append(peer)
             
     def remove_peer(self,peer: tuple)-> None:
@@ -109,7 +119,7 @@ class Peer():
             peer (ip,port): tuple(ip, port ) of peer
         """
         with self.peerlist_semaphore:
-            print(f"[TRACKER] remove peer {peer} in list tracking")
+            print(f"[PEER] remove peer {peer} in list tracking")
             self.peer_list.remove(peer)
     
     def update_download(self, bytes):
@@ -556,7 +566,7 @@ def upload_peer_test():
     peer.start()
     
 def download_peer_test():
-    peer = Peer(id=3,port = 4043,pieces_storage="pieces3")
+    peer = Peer(id=2,port = 4042,pieces_storage="pieces2")
     list_down = ["metainfo/walking.torrent.json","metainfo/test.torrent.json", "metainfo/meeting_1.torrent.json"]
     # for item in list_down:
     #     peer.download_torrent(item)
@@ -564,10 +574,80 @@ def download_peer_test():
     # peer.download_torrent("metainfo/walking.torrent.json")
     
     # peer.start()
+
+
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Peer script')
+    parser.add_argument("--id", type=int, help="Peer id",default=0)
+    parser.add_argument("--port",type=int,help="Peer port", default=4040 )
+    parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
+    parser.add_argument("--pieces-storage",type=str, help="directory hold pieces", default="pieces" )
+    parser.add_argument("--output-storage",type=str, help="directory hold output file", default="output" )
     
+    
+    parser.add_argument("--header-length",type=int, help="header length of message", default=1024 )
+    parser.add_argument("--download",nargs="+", help="list file want to download")
+    parser.add_argument("--upload",nargs="+", help="list file want to upload")
+    parser.add_argument("--tracker-ip", type=str, help="ip of tracker want to upload",default="localhost")
+    parser.add_argument("--tracker-port", type=int, help="ip of tracker want to upload", default= 5050)
+    
+    
+    args = parser.parse_args()
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+    id = args.id
+    port = args.port
+    metainfo_storage = args.metainfo_storage
+    pieces_storage = args.pieces_storage
+    output_storage = args.output_storage
+    header_length = args.header_length
+    download = args.download
+    upload = args.upload
+    tracker_ip =  args.tracker_ip
+    tracker_port =  args.tracker_port
+    
+    
+    peer = Peer(
+        id = id, 
+        port = port, 
+        metainfo_storage = metainfo_storage,
+        pieces_storage = pieces_storage,
+        output_storage = output_storage,
+        header_length = header_length
+    )
+    
+    download_thread = None
+    if download:
+        download_thread = threading.Thread(target=peer.download_files, args=(download,))
+        download_thread.start()
+    
+    
+    upload_thread = None
+    if upload:
+        upload_thread = threading.Thread(target=peer.upload_files, args=(upload,(tracker_ip,tracker_port)))
+        upload_thread.start()
+        
+    
+    
+    if download:
+        download_thread.join()
+        
+    if upload:
+        upload_thread.join()
+        peer.start()
+    
+    
+    
+    
+
+
     
     
 if __name__ == "__main__":
     # upload_peer_test()
     
-    download_peer_test()
+    # download_peer_test()
+    main()

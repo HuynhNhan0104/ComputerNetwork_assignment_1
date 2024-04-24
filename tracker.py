@@ -1,16 +1,22 @@
 import socket
 import threading
 import json
+import os
 from utils import create_metainfo_hashtable
+import argparse
 # https://www.geeksforgeeks.org/file-transfer-using-tcp-socket-in-python/
 
 class Tracker:
-    def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
+    def __init__(self, id = 0, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
+        self.id = id
         self.ip = "localhost"# socket.gethostbyname(socket.gethostname())
         self.port = port
         self.header_length = header_length
         self.peer_list = set(peer_list)
         self.metainfo_storage = metainfo_storage
+        if not os.path.exists(self.metainfo_storage):
+            os.makedirs(self.metainfo_storage)
+            
         self.peer_list_semaphore = threading.Semaphore()
         self.socket_tracker = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_tracker.bind((self.ip,self.port))
@@ -18,11 +24,12 @@ class Tracker:
         self.metainfo_hashtable = create_metainfo_hashtable(self.metainfo_storage)
         self.metainfo_hashtable_semaphore = threading.Semaphore()
         print(f"[TRACKER] Socket is binded to {self.port}")
+        self.running = True
     
         
     def start(self):
         print("[STARTING] Server is starting ...")
-        while True:
+        while self.running:
             try:
                 connection, address = self.socket_tracker.accept()
                 thread = threading.Thread(target=self.handle_peer, args=(connection, address))
@@ -245,13 +252,13 @@ class Tracker:
             client_connection.connect(peer)
             message = {
                 "type": "findTorrent",
-                "tracker_id": "1",
+                "tracker_id": self.id,
                 "file_name": metainfo.get("info").get("name")
             }
             
             self.send_message(client_connection, message)
             response = self.recieve_message(client_connection, peer)
-            print(json.dumps(response,indent=4))
+            # print(json.dumps(response,indent=4))
             if response.get("hit") == True:
                 peer_list_for_client.append({"id":response.get("id"),"ip":response.get("ip"), "port":response.get("port")})
             client_connection.close()
@@ -272,12 +279,41 @@ def test_meta_info():
     tracker.process_message(json.dumps(message))
     
     
-def run():
-    tracker = Tracker()
+
+
+# Viết mã argparse ở đây
+
+
+
+
+# parser.add_argument('filenames', nargs='+', help='Danh sách tên file')
+# print(args.Namespace)
+
+# # Mã logic chính của script ở đây
+# for arg in args:
+#     # Xử lý từng file
+#     print(f"Processing file: {arg}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Tracker script')
+    parser.add_argument("--id", type=int, help="traker id",default=0)
+    parser.add_argument("--port",type=int,help="tracker port", default=5050 )
+    parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
+    parser.add_argument("--header-length",type=int, help="header length of message", default=1024 )
+    args = parser.parse_args()
+    # for key, value in vars(args).items():
+    #     print(f"{key}: {value}")
+    id = args.id
+    port = args.port
+    metainfo_storage = args.metainfo_storage
+    header_length = args.header_length
+    
+    
+    tracker = Tracker(id=id,port = port, metainfo_storage=metainfo_storage,header_length= header_length)
     tracker.start()
     
 if __name__ == "__main__":
-    run()
+    main()
        
         
        
