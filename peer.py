@@ -9,12 +9,10 @@ from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_
 
 class Peer():
     def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "localhost"
+        self.tracker_ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
         self.tracker_port= 5050
         self.id = id
-        self.ip = "localhost"
-        self.tracker_port= 5050
-        # socket.gethostbyname(socket.gethostname())
+        self.ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
         self.port = port
         self.peer_list = peer_list
         self.header_length = header_length
@@ -403,6 +401,7 @@ class Peer():
         annouce = metainfo.get("announce")
         annouce = annouce.split(":")
         tracker_ip = annouce[0]
+        print(tracker_ip)
         tracker_port = int(annouce[1])
         file_path = metainfo.get("info").get("name").split(".")
         file_name = file_path[0]
@@ -633,12 +632,6 @@ def main():
     if upload:
         upload_thread.join()
         peer.start()
-    
-    
-    
-    
-
-
     
     
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import argparse
 class Tracker:
     def __init__(self, id = 0, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
         self.id = id
-        self.ip = "localhost"# socket.gethostbyname(socket.gethostname())
+        self.ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
         self.port = port
         self.header_length = header_length
         self.peer_list = set(peer_list)
