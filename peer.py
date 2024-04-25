@@ -9,7 +9,8 @@ from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_
 
 class Peer():
     def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
+        self.tracker_ip = "10.28.224.201"#
+        socket.gethostbyname(socket.gethostname())
         self.tracker_port= 5050
         self.id = id
         self.ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
@@ -140,8 +141,8 @@ class Peer():
         message = message.encode("utf-8")
         message_length = str(len(message)).encode("utf-8")
         message_length += b' '*(self.header_length - len(message_length))
-        connection.send(message_length)
-        connection.send(message)
+        connection.sendall(message_length)
+        connection.sendall(message)
         
     def recieve_message(self, connection, address= None) -> dict:
         """
@@ -159,6 +160,7 @@ class Peer():
             return None
         message_length = int(message_length)
         message = connection.recv(message_length).decode("utf-8")
+        print(message)
         return json.loads(message)
     
     def send_file(self, connection,file_path,chunk= 512*1024):
@@ -453,7 +455,6 @@ class Peer():
             
             
         
-        print("gone there")
         pieces_downloaded = get_piece_list_of_file(file_name,self.pieces_storage)
         if sorted(pieces_downloaded) == sorted(piece_list):
             print(f"[DOWNLOAD] Get full piece of {file_name} ")
@@ -590,6 +591,7 @@ def main():
     
     
     args = parser.parse_args()
+    
     for key, value in vars(args).items():
         print(f"{key}: {value}")
     id = args.id
