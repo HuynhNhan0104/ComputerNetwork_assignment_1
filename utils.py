@@ -86,7 +86,9 @@ def merge_file_from_pieces(file_paths, output_file_path):
 def create_hash_key_metainfo(file):
     with open(file, "rb") as torrent:
         data = torrent.read()
-        key = hashlib.sha1(data).hexdigest()
+        cleaned_data = data.replace(b"\n", b"").replace(b"\r", b"").replace(b" ",b"")
+        # print(cleaned_data)
+        key = hashlib.sha1(cleaned_data).hexdigest()
         return key
     
 def create_metainfo_hashtable(directory):

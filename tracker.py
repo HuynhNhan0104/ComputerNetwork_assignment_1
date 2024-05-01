@@ -76,8 +76,8 @@ class Tracker:
         message = message.encode("utf-8")
         message_length = str(len(message)).encode("utf-8")
         message_length += b' '*(self.header_length - len(message_length))
-        connection.send(message_length)
-        connection.send(message)
+        connection.sendall(message_length)
+        connection.sendall(message)
         
     def recieve_message(self, connection, address=None) -> dict:
         message_length = connection.recv(self.header_length).decode("utf-8")
@@ -233,7 +233,7 @@ class Tracker:
             metainfo_name = command.get("metainfo_name")
             if metainfo_hash in self.metainfo_hashtable:
                 response = {
-                    "notification": "track was contain this metainfo file",
+                    "notification": "tracker was contain this metainfo file",
                     "hit": True
                 }
                 self.send_message(connection, response)
