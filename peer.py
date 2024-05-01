@@ -9,11 +9,11 @@ from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_
 
 class Peer():
     def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "10.28.224.201"#
-        socket.gethostbyname(socket.gethostname())
+        self.tracker_ip = "192.168.99.252"#
+        # socket.gethostbyname(socket.gethostname())
         self.tracker_port= 5050
         self.id = id
-        self.ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
+        self.ip = "192.168.99.252"#socket.gethostbyname(socket.gethostname())
         self.port = port
         self.peer_list = peer_list
         self.header_length = header_length

@@ -9,7 +9,7 @@ import argparse
 class Tracker:
     def __init__(self, id = 0, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
         self.id = id
-        self.ip = "10.28.224.201"#socket.gethostbyname(socket.gethostname())
+        self.ip = "192.168.99.252"#socket.gethostbyname(socket.gethostname())
         self.port = port
         self.header_length = header_length
         self.peer_list = set(peer_list)
@@ -85,7 +85,7 @@ class Tracker:
         message = connection.recv(message_length).decode("utf-8")
         return json.loads(message)
    
-    def send_metainfo_file(self, connection,file_path,chunk= 4*1024):
+    def send_metainfo_file(self, connection,file_path,chunk= 512*1024):
         """
         send all data of file to other peer which is connected with
 
@@ -94,6 +94,7 @@ class Tracker:
             file_path (string): file path of file which need to send
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
         """
+        # with self.send_file_semaphore:
         with open(file_path,"rb") as item:
             try:
                 while True:
@@ -102,14 +103,15 @@ class Tracker:
                         connection.sendall(b'done')
                         break
                     connection.sendall(data)
+                    # self.update_upload(sys.getsizeof(data))
+                if connection.recv(chunk) == b'ok':
+                    print(f"[SEND PIECE] send successfully : {file_path}")
                     
 
             except Exception as e:
                 print(e)
-
-        print(f"finish send: {file_path}")
        
-    def recieve_metainfo_file(self,connection, out_path,chunk=4*1024):
+    def recieve_metainfo_file(self,connection, out_path,chunk=512*1024, test = 0):
         """
         recieve file from other peer which is connected with
 
@@ -122,12 +124,15 @@ class Tracker:
         with open(out_path,"wb") as item:
             while True:
                 data = connection.recv(chunk)
-                if data == b'done':
+                if data.endswith(b'done'):# == b'done':
+                    connection.sendall(b"ok")
+                    print("[SEND PIECE] recieve successfully")
                     break
                 item.write(data)
-                # print(sys.getsizeof(data))
-                
-        print(f"finish receive: {out_path}")
+                #self.update_download(sys.getsizeof(data))
+                    # print(sys.getsizeof(data))
+             
+        # print(f"finish receive: {out_path}")
     
     def handle_peer(self, connection, address):
         try:
@@ -158,7 +163,10 @@ class Tracker:
                 # parse metainfo from hash of metainfo
                 meta_info = self.parse_metainfo(metainfo_hash)
                 if not meta_info:
-                    response = {"action":"error"}
+                    response = {
+                        "action":"error",
+                        "error": "tracker does not hold this metainfo"
+                    }
                     return response
                 # send broadcast to ask all peer in list to find who is keept pieces of this file
                 peer_list_response = self.findPeersGetTorrent(meta_info)
