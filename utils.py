@@ -180,5 +180,12 @@ if __name__ == "__main__":
     # print(get_piece_list_of_file("meeting_1.mp4"))
     # create_pieces_directory("input/test.mp4")
     # merge_file_from_pieces("pieces1/walking",output_file_path="input/walking.mp4")
-    print(create_hash_key_metainfo("metainfo/test.torrent.json"))
+    # print(create_hash_key_metainfo("metainfo/test.torrent.json"))
+    with open("test.txt","r") as file:
+        while True:
+            data = file.read(4)
+            if not data:
+                break
+            print(len(data))
+            print(data)
     

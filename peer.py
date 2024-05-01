@@ -40,6 +40,8 @@ class Peer():
         self.socket_peer.bind((self.ip,self.port))
         self.socket_peer.listen(10)
         print(f"[PEER] Socket is binded to {self.port}")
+        bufsize = self.socket_peer.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF) 
+        print (f"Buffer size [Before]:{bufsize}" ) 
     
     
     # def connect_to_tracker(self):
@@ -138,13 +140,12 @@ class Peer():
             mess (dict): message need send 
         """
         message = json.dumps(mess)
-        # print(type(message))
-        print(f"[SEND MESSAGE]")
+        # print(f"[SEND MESSAGE]")
         message = message.encode("utf-8")
         message_length = str(len(message)).encode("utf-8")
         message_length += b' '*(self.header_length - len(message_length))
-        print(message_length)
-        print(message)
+        # print(message_length)
+        # print(message)
         connection.sendall(message_length)
         connection.sendall(message)
         
@@ -172,13 +173,13 @@ class Peer():
             message += data
                 
         
-        print(f"[RECIEVE MESSAGE]")
-        print(message_length)
-        print(message.decode("utf-8"))
-        print(len(message))
+        # print(f"[RECIEVE MESSAGE]")
+        # print(message_length)
+        # print(message.decode("utf-8"))
+        # print(len(message))
         return json.loads(message)
     
-    def send_file(self, connection,file_path,chunk= 512*1024):
+    def send_file(self, connection,file_path,chunk= 1024):
         """
         send all data of file to other peer which is connected with
 
@@ -188,48 +189,82 @@ class Peer():
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
         """
         # with self.send_file_semaphore:
+        # sending file name
+        print(f"chunk size {chunk }")
+        
+        # file_name_length = str(len(file_path)).encode("utf-8")
+        # print(f"len filename: {len(file_name_length)}")
+        # file_name_length += b" "*(126 - len(file_name_length))
+        # print(file_name_length)
+        # print(len(file_name_length))
+        # connection.sendall(file_name_length)
+        # connection.sendall(file_path.encode('utf-8'))
+        # sending file content
+        message = {
+            "file_name": file_path
+        }
+        self.send_message(connection,message)
+        total = 0
         with open(file_path,"rb") as item:
             try:
                 while True:
                     data = item.read(chunk)
                     if not data: 
+                        # print("hello")
                         connection.sendall(b'done')
                         break
                     connection.sendall(data)
+                    total += len(data)
                     # print(data,end="")
                     self.update_upload(sys.getsizeof(data))
-                if connection.recv(chunk) == b'ok':
-                    print(f"[SEND PIECE] send successfully : {file_path}")
-                    
-
+                # connection.sendall(b'done')
+                if connection.recv(2) == b'ok':
+                    print(f"[SEND PIECE] send successfully : {file_path} with {total/1024} kbs")
             except Exception as e:
                 print(e)
-
-       
-    def recieve_file(self,connection, out_path,chunk=512*1024, test = 0):
+        
+    def recieve_file(self,connection, out_path,chunk=1024, test = 0):
         """
         recieve file from other peer which is connected with
-
         Args:
             connection (socket):connnection to other peer
             out_path (str): file output path
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
             
         """
+        print(f"chunk size {chunk }")
+        # file_name_length = connection.recv(126).decode('utf-8')
+        # print(file_name_length)
+        # print(len(file_name_length))
+        # file_name_length = int(file_name_length)
+        # file_name = connection.recv(file_name_length)
+        message = self.recieve_message(connection)
+        file_name = message.get("file_name")
+        print(f"[RECIEVING PIECE]:{file_name}")
+        
         with open(out_path,"wb") as item:
             total = 0
+            
             while True:
                 data = connection.recv(chunk)
-                if data.endswith(b'done'):# == b'done':
+                # print(data)
+                if b"done" in data:
+                    # print(data)
+                    idx = data.find(b"done")
+                    if idx != -1:
+                        remain = data[:idx]
+                        item.write(remain)
+                        total += len(remain)
+                        print(f"remain: {len(remain)}" )
+                        
+                    print(f"last length data is {len(data) - 4}")
                     connection.sendall(b"ok")
                     break
                 item.write(data)
                 total += len(data)
                 #self.update_download(sys.getsizeof(data))
                     # print(sys.getsizeof(data))
-            print(f"recieve: {total} bytes data" )
-             
-        # print(f"finish receive: {out_path}")
+            print(f"recieve: {total} Kbs data" )
     
     def send_list_pieces(self,connection,pieces_list, file_name,chunk) :
         for piece in pieces_list:
@@ -412,7 +447,7 @@ class Peer():
         return piece_hold_by_peers
     
     
-    def download_pieces(self,address, pieces_list, file_name, chunk = 4*1024):
+    def download_pieces(self,address, pieces_list, file_name, chunk = 1024):
         peer_connection =  socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         peer_connection.connect(address)
         message = {
