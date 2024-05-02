@@ -279,7 +279,6 @@ class Peer():
         """
         # with self.send_file_semaphore:
         # sending file name
-        print(f"chunk size {chunk }")
 
         message = {
             "file_name": file_path
@@ -313,13 +312,7 @@ class Peer():
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
             
         """
-        print(f"chunk size {chunk }")
-        # file_name_length = connection.recv(126).decode('utf-8')
-        # print(file_name_length)
-        # print(len(file_name_length))
-        # file_name_length = int(file_name_length)
-        # file_name = connection.recv(file_name_length)
-        message = self.recieve_message(connection)
+
         file_name = message.get("file_name")
         print(f"[RECIEVING PIECE]:{file_name}")
         

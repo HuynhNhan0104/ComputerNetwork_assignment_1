@@ -37,17 +37,13 @@ class Tracker:
             except KeyboardInterrupt:
                 # connection.close()
                 break
+            
     def handle_peer(self, connection, address):
-        try:
-            print(f"[NEW CONNECTION] {address} connected")
-            connected = True
-            while connected:
-                message = self.recieve_message(connection, address)
-                response = self.process_message(message)
-                connected = self.response_action(connection,address, response)    
-            connection.close()
-        except:
-            pass
+        print(f"[NEW CONNECTION] {address} connected")
+        message = self.recieve_message(connection, address)
+        response = self.process_message(message)
+        connected = self.response_action(connection,address, response)    
+        connection.close()
         
         
     def parse_metainfo(self,hash_info) -> dict:
