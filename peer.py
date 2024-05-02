@@ -5,15 +5,14 @@ import os
 import sys
 import time
 import argparse
-from utils import merge_file_from_pieces, split_file_to_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, create_torrent, create_pieces_directory
+from utils import merge_file_from_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, create_torrent, create_pieces_directory
 
 class Peer():
-    def __init__(self, id, port:int= 4040, peer_list:list = [], header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "192.168.99.252"#
-        # socket.gethostbyname(socket.gethostname())
+    def __init__(self, port:int= 4040, peer_list:set = set(), header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
+        self.tracker_ip = "192.168.99.252"
         self.tracker_port= 5050
-        self.id = id
-        self.ip = "192.168.99.252"#socket.gethostbyname(socket.gethostname())
+        self.id = -1
+        self.ip = "192.168.99.252"
         self.port = port
         self.peer_list = peer_list
         self.header_length = header_length
@@ -33,36 +32,17 @@ class Peer():
             
         self.upload = 0
         self.download = 0
-        self.peerlist_semaphore = threading.Semaphore()
+        self.peer_list_semaphore = threading.Semaphore()
         self.download_semaphore = threading.Semaphore()
         self.upload_semaphore = threading.Semaphore()
+        
+        # self.join_network()
+        
         self.socket_peer = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.socket_peer.bind((self.ip,self.port))
         self.socket_peer.listen(10)
         print(f"[PEER] Socket is binded to {self.port}")
-        bufsize = self.socket_peer.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF) 
-        print (f"Buffer size [Before]:{bufsize}" ) 
     
-    
-    # def connect_to_tracker(self):
-    #     """
-    #     send signal to join network, tracker will add this address to list
-    #     """
-    #     request = {
-    #         "type":"join",
-    #         "id": self.id,
-    #         "ip": self.ip,
-    #         "port": self.port,
-    #         "upload": 0,
-    #         "download":0
-    #     }
-    #     tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     tracker_connection.connect((self.tracker_ip,self.tracker_port))
-    #     self.send_message(tracker_connection,request)
-    #     response = self.recieve_message(tracker_connection)
-    #     print(json.dumps(response,indent=4))
-    #     tracker_connection.close()
-          
     def start(self):
         """
         Stating listen, if recieve connecttion request then creating thread handle peer
@@ -74,6 +54,122 @@ class Peer():
            print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
            thread.start()  
            
+    def handle_peer(self, connection, address):
+        """
+        to handle request of another host(tracker or peer)
+        recieve -> process message -> action
+        """
+        print(f"[NEW CONNECTION] {address} connected")
+        connected = True
+        self.add_peer(peer = address)
+        message =  self.recieve_message(connection,address)
+        response = self.process_message(message)
+        self.response_action(connection,address, response),
+        connection.close()
+        self.remove_peer(address)
+        
+    def join_network(self):
+        message = {
+            "type":"join",
+            "ip":self.ip,
+            "port":self.port
+        }
+        tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tracker_connection.connect((self.tracker_ip,self.tracker_port))
+        
+        self.send_message(tracker_connection,message)
+        response = self.recieve_message(tracker_connection)
+        if response.get("error"):
+            return
+        
+        
+        print(response)
+        self.id = response.get("id")
+        
+    
+    def process_message(self, mess):
+        """
+        process message from request and create action 
+
+        Args:
+            mess (dict): request message
+
+        Returns:
+            dict: action message 
+        """
+        # print(json.dumps(mess,indent=4))
+        type_message = mess.get("type")
+        
+        if type_message == "findTorrent":
+            file_name = mess.get("file_name")
+            response = {
+                "action": "response findTorrent",
+                "id": self.id,
+                "ip": self.ip,
+                "port": self.port,
+                "hit": self.isObtainedPieces(file_name)
+            }
+            return response
+        
+        elif type_message =="getPieces":
+            am_choking = self.is_choking()
+            am_interested = self.is_interested()
+            if not am_choking:
+                file_name = mess.get("file_name")
+                pieces = get_piece_list_of_file(file_name,self.pieces_storage)   
+                response = {
+                    "id":self.id,
+                    "action":"response download pieces",
+                    "am_choking":am_choking,
+                    "am_interested":am_interested,
+                    "pieces": pieces
+                }
+                return response
+            else:
+                
+                response = {
+                    "action":"response download pieces",
+                    "am_choking":am_choking,
+                }
+                
+                return response
+            
+        elif type_message =="downloadPieces":
+            pieces = mess.get("pieces")
+            chunk_size = mess.get("chunk")
+            name = mess.get("file_name") 
+            response = {
+                "id":self.id,
+                "action":"upload pieces",
+                "pieces_dicrectory": "pieces",
+                "file_name":name,
+                "pieces": pieces,
+                "chunk": chunk_size
+            }
+            return response
+        else:
+            pass
+    
+   
+    def response_action(self, connection, address, command):
+        """
+        make action from command send from process message
+
+        Args:
+            connection (socket): connnection  of peer which is connected with
+            address (ip,port):  address  of peer which is connected with
+            command (dict): action message created from process_message
+        """
+        if command.get("action") == "response findTorrent":
+            self.send_message(connection,command)
+        if command.get("action") == "response download pieces":
+            self.send_message(connection,command)
+        if command.get("action") == "upload pieces":
+            pieces = command.get("pieces")
+            chunk = command.get("chunk")
+            name = command.get("file_name")
+            self.send_list_pieces(connection,pieces,name,chunk)
+    
     def isObtainedPieces(self,file_path:str):
         """
         check peer is hold pieces of this file or not
@@ -101,27 +197,24 @@ class Peer():
             data = json.loads(data)
             return data 
                 
-    def add_peer(self, peer: tuple)-> None:
-        """
-        add peer to list contact
-        Args:
-            peer (ip,port): tuple(ip, port ) of peer
-        """
-        with self.peerlist_semaphore:
-            print(f"[PEER] Add peer {peer} to list tracking")
-            self.peer_list.append(peer)
-            
-    def remove_peer(self,peer: tuple)-> None:
-        """
-        remove peer from list contact
-
-        Args:
     
-            peer (ip,port): tuple(ip, port ) of peer
-        """
-        with self.peerlist_semaphore:
-            print(f"[PEER] remove peer {peer} in list tracking")
-            self.peer_list.remove(peer)
+    def add_peer(self, peer: tuple)-> None:
+        with self.peer_list_semaphore:
+            try:
+                print(f"[PEER] Add peer {peer} to list tracking")
+                self.peer_list.add(peer)
+            except Exception as e:
+                print(e)
+                
+                
+    def remove_peer(self,peer: tuple)-> None:
+        with self.peer_list_semaphore:
+            try:
+                print(f"[PEER] remove peer {peer} in list tracking")
+            
+                self.peer_list.discard(peer)
+            except Exception as e:
+                print(e)
     
     def update_download(self, bytes):
         with self.download_semaphore:
@@ -144,8 +237,7 @@ class Peer():
         message = message.encode("utf-8")
         message_length = str(len(message)).encode("utf-8")
         message_length += b' '*(self.header_length - len(message_length))
-        # print(message_length)
-        # print(message)
+
         connection.sendall(message_length)
         connection.sendall(message)
         
@@ -174,9 +266,6 @@ class Peer():
                 
         
         # print(f"[RECIEVE MESSAGE]")
-        # print(message_length)
-        # print(message.decode("utf-8"))
-        # print(len(message))
         return json.loads(message)
     
     def send_file(self, connection,file_path,chunk= 1024):
@@ -191,15 +280,7 @@ class Peer():
         # with self.send_file_semaphore:
         # sending file name
         print(f"chunk size {chunk }")
-        
-        # file_name_length = str(len(file_path)).encode("utf-8")
-        # print(f"len filename: {len(file_name_length)}")
-        # file_name_length += b" "*(126 - len(file_name_length))
-        # print(file_name_length)
-        # print(len(file_name_length))
-        # connection.sendall(file_name_length)
-        # connection.sendall(file_path.encode('utf-8'))
-        # sending file content
+
         message = {
             "file_name": file_path
         }
@@ -255,9 +336,6 @@ class Peer():
                         remain = data[:idx]
                         item.write(remain)
                         total += len(remain)
-                        print(f"remain: {len(remain)}" )
-                        
-                    print(f"last length data is {len(data) - 4}")
                     connection.sendall(b"ok")
                     break
                 item.write(data)
@@ -275,101 +353,9 @@ class Peer():
         for piece in pieces_list:
             self.recieve_file(connection,f"{self.pieces_storage}/{file_name}/{piece}",chunk)
     
-        
-    def handle_peer(self, connection, address):
-        """
-        to handle request of another host(tracker or peer)
-        recieve -> process message -> action
-        """
-        print(f"[NEW CONNECTION] {address} connected")
-        connected = True
-        self.add_peer(peer = address)
-        while connected:
-            message =  self.recieve_message(connection,address)
-            response = self.process_message(message)
-            self.response_action(connection,address, response),
-            connected = False
-        connection.close()
-            
-    def process_message(self, mess):
-        """
-        process message from request and create action 
+   
 
-        Args:
-            mess (dict): request message
-
-        Returns:
-            dict: action message 
-        """
-        # print(json.dumps(mess,indent=4))
-        type_message = mess.get("type")
-        
-        if type_message == "findTorrent":
-            file_name = mess.get("file_name")
-            response = {
-                "action": "response findTorrent",
-                "id": self.id,
-                "ip": self.ip,
-                "port": self.port,
-                "hit": self.isObtainedPieces(file_name)
-            }
-            return response
-        
-        elif type_message =="getPieces":
-            am_choking = self.is_choking()
-            am_interested = self.is_interested()
-            if not am_choking:
-                file_name = mess.get("file_name")
-                pieces = get_piece_list_of_file(file_name,self.pieces_storage)   
-                response = {
-                    "action":"response download pieces",
-                    "am_choking":am_choking,
-                    "am_interested":am_interested,
-                    "pieces": pieces
-                }
-                return response
-            else:
-                
-                response = {
-                    "action":"response download pieces",
-                    "am_choking":am_choking,
-                }
-                
-                return response
-            
-        elif type_message =="downloadPieces":
-            pieces = mess.get("pieces")
-            chunk_size = mess.get("chunk")
-            name = mess.get("file_name") 
-            response = {
-                "action":"upload pieces",
-                "pieces_dicrectory": "pieces",
-                "file_name":name,
-                "pieces": pieces,
-                "chunk": chunk_size
-            }
-            return response
-        else:
-            pass
-    
-    def response_action(self, connection, address, command):
-        """
-        make action from command send from process message
-
-        Args:
-            connection (socket): connnection  of peer which is connected with
-            address (ip,port):  address  of peer which is connected with
-            command (dict): action message created from process_message
-        """
-        if command.get("action") == "response findTorrent":
-            self.send_message(connection,command)
-        if command.get("action") == "response download pieces":
-            self.send_message(connection,command)
-        if command.get("action") == "upload pieces":
-            pieces = command.get("pieces")
-            chunk = command.get("chunk")
-            name = command.get("file_name")
-            self.send_list_pieces(connection,pieces,name,chunk)
+ 
                  
         
     def get_peer_list_from_tracker(self, metainfo_path, tracker_ip, tracker_port):
@@ -386,6 +372,10 @@ class Peer():
         tracker_connection.connect((tracker_ip,tracker_port))
         self.send_message(tracker_connection,message)
         response = self.recieve_message(tracker_connection)
+        # print(response)
+        if not response:
+            print(f"[ERROR] Tracker doesnot response")
+            return
         peer_list = response.get("peers")
         tracker_connection.close()
         return peer_list
@@ -397,7 +387,8 @@ class Peer():
             peer_connnection.connect((peer.get("ip"),peer.get("port")))
             message = {
                 "type": "getPieces",
-                "file_name" : file_name
+                "file_name" : file_name,
+                "id":self.id
             }
             self.send_message(peer_connnection,message)
             response = self.recieve_message(peer_connnection)
@@ -452,6 +443,7 @@ class Peer():
         peer_connection.connect(address)
         message = {
             "type": "downloadPieces",
+            "id":self.id,
             "file_name": file_name,
             "pieces":pieces_list,
             "chunk": chunk
@@ -489,13 +481,17 @@ class Peer():
             return
         peer_list = self.get_peer_list_from_tracker(metainfo_path,tracker_ip,tracker_port)
         # print(peer_list)
+        
+        
+        if not peer_list:
+            print(f"[ERROR] No seeder hold pieces of this file")
+            return
+        
         piece_hold_by_peers = self.get_pieces_from_peers(peer_list,file_name,pieces_downloaded)
         # print(piece_hold_by_peers)    
         
         piece_hold_by_peers = self.plan_to_download(piece_hold_by_peers)
         
-        # for item in piece_hold_by_peers:
-        #     print(json.dumps(item,indent=4))
             
             
         if not piece_hold_by_peers:
@@ -554,10 +550,10 @@ class Peer():
 
         
         
-    def create_upload_alert(self,metainfo_hash,metainfo_name):
+    def upload_request(self,metainfo_hash,metainfo_name):
         request = {
             "type":"upload",
-            "id": self.id,
+            # "id": self.id,
             "ip": self.ip,
             "port": self.port,
             "upload": self.upload,
@@ -590,7 +586,7 @@ class Peer():
         # print(file_name)
         metainfo_hash = create_torrent(file_share, f"{tracker_address[0]}:{tracker_address[1]}",output_path)
         # print(str(metainfo_hash))
-        self.create_upload_alert(metainfo_hash,file_name)
+        self.upload_request(metainfo_hash,file_name)
         # self.connect_to_tracker()
    
    
@@ -638,7 +634,6 @@ def download_peer_test():
 
 def main():
     parser = argparse.ArgumentParser(description='Peer script')
-    parser.add_argument("--id", type=int, help="Peer id",default=0)
     parser.add_argument("--port",type=int,help="Peer port", default=4040 )
     parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
     parser.add_argument("--pieces-storage",type=str, help="directory hold pieces", default="pieces" )
@@ -654,9 +649,8 @@ def main():
     
     args = parser.parse_args()
     
-    for key, value in vars(args).items():
-        print(f"{key}: {value}")
-    id = args.id
+    # for key, value in vars(args).items():
+    #     print(f"{key}: {value}")
     port = args.port
     metainfo_storage = args.metainfo_storage
     pieces_storage = args.pieces_storage
@@ -669,7 +663,6 @@ def main():
     
     
     peer = Peer(
-        id = id, 
         port = port, 
         metainfo_storage = metainfo_storage,
         pieces_storage = pieces_storage,

@@ -57,15 +57,15 @@ def write_data_file(data,output_file_name: str):
     with open(output_file_name +".txt", 'wb') as f:
         f.write(data) 
 
-def split_file_to_pieces(file_path:str,output_pieces_directory: str, file_name_index:str):
-    with open(file_path, 'rb') as f:
-        i: int = 0
-        while True:
-            data = f.read(PIECE_LENGTH)  # Read in 512KB chunks
-            if not data:
-                break
-            write_data_file(data,output_pieces_directory+"/" + file_name_index+"_"+str(i))
-            i+=1
+# def split_file_to_pieces(file_path:str,output_pieces_directory: str, file_name_index:str):
+#     with open(file_path, 'rb') as f:
+#         i: int = 0
+#         while True:
+#             data = f.read(PIECE_LENGTH)  # Read in 512KB chunks
+#             if not data:
+#                 break
+#             write_data_file(data,output_pieces_directory+"/" + file_name_index+"_"+str(i))
+#             i+=1
 
 def merge_file_from_pieces(file_paths, output_file_path):
     if os.path.isdir(file_paths):

@@ -7,9 +7,8 @@ import argparse
 # https://www.geeksforgeeks.org/file-transfer-using-tcp-socket-in-python/
 
 class Tracker:
-    def __init__(self, id = 0, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
-        self.id = id
-        self.ip = "192.168.99.252"#socket.gethostbyname(socket.gethostname())
+    def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
+        self.ip = "192.168.99.252"
         self.port = port
         self.header_length = header_length
         self.peer_list = set(peer_list)
@@ -38,7 +37,19 @@ class Tracker:
             except KeyboardInterrupt:
                 # connection.close()
                 break
-            
+    def handle_peer(self, connection, address):
+        try:
+            print(f"[NEW CONNECTION] {address} connected")
+            connected = True
+            while connected:
+                message = self.recieve_message(connection, address)
+                response = self.process_message(message)
+                connected = self.response_action(connection,address, response)    
+            connection.close()
+        except:
+            pass
+        
+        
     def parse_metainfo(self,hash_info) -> dict:
         metainfo_path = self.metainfo_hashtable.get(hash_info)
         if metainfo_path:
@@ -71,18 +82,46 @@ class Tracker:
         with self.metainfo_hashtable_semaphore:
             self.metainfo_hashtable.update({key:metainfo_path})
         
-    def send_message(self, connection, mess: dict):
+    def send_message(self,connection,mess: dict):
+        """
+        send message on connection to another peer
+
+        Args:
+            connection (socket): socket connection
+            mess (dict): message need send 
+        """
         message = json.dumps(mess)
+        # print(f"[SEND MESSAGE]")
         message = message.encode("utf-8")
         message_length = str(len(message)).encode("utf-8")
         message_length += b' '*(self.header_length - len(message_length))
         connection.sendall(message_length)
         connection.sendall(message)
         
-    def recieve_message(self, connection, address=None) -> dict:
+        
+    def recieve_message(self, connection, address= None) -> dict:
+        """
+        recieve message on connection from another peer
+
+        Args:
+            connection (socket): socket connection
+            address ((ip, port), optional): address of this connection host. Defaults to None.
+
+        Returns:
+            dict: message need recieve
+        """
         message_length = connection.recv(self.header_length).decode("utf-8")
+        if not message_length:
+            return None
         message_length = int(message_length)
-        message = connection.recv(message_length).decode("utf-8")
+        message = b''
+        while len(message) < message_length:
+            data = connection.recv(min(message_length - len(message), 1024))  # Adjust buffer size as needed
+            if not data:
+                return None  # Handle unexpected connection termination
+            message += data        
+        # print(f"[RECIEVE MESSAGE]")
+
         return json.loads(message)
    
     def send_metainfo_file(self, connection,file_path,chunk= 512*1024):
@@ -111,7 +150,7 @@ class Tracker:
             except Exception as e:
                 print(e)
        
-    def recieve_metainfo_file(self,connection, out_path,chunk=512*1024, test = 0):
+    def recieve_metainfo_file(self,connection, out_path,chunk=1024, test = 0):
         """
         recieve file from other peer which is connected with
 
@@ -121,38 +160,40 @@ class Tracker:
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
             
         """
+        message = self.recieve_message(connection)
+        file_name = message.get("file_name")
+        print(f"[RECIEVING PIECE]:{file_name}")
         with open(out_path,"wb") as item:
+            total = 0
             while True:
                 data = connection.recv(chunk)
-                if data.endswith(b'done'):# == b'done':
+                # print(data)
+                if b"done" in data:
+                    # print(data)
+                    idx = data.find(b"done")
+                    if idx != -1:
+                        remain = data[:idx]
+                        item.write(remain)
+                        total += len(remain)
                     connection.sendall(b"ok")
-                    print("[SEND PIECE] recieve successfully")
                     break
                 item.write(data)
-                #self.update_download(sys.getsizeof(data))
+                total += len(data)
                     # print(sys.getsizeof(data))
-             
-        # print(f"finish receive: {out_path}")
+            print(f"recieve: {total} Kbs data" )
     
-    def handle_peer(self, connection, address):
-        try:
-            print(f"[NEW CONNECTION] {address} connected")
-            connected = True
-            while connected:
-                message = self.recieve_message(connection, address)
-                response = self.process_message(message)
-                connected = self.response_action(connection,address, response)    
-            connection.close()
-        except:
-            pass
+
      
     def process_message(self, mess)-> str:
         try:
             if mess.get("type") == "join":
+                id = len(self.peer_list)
                 self.add_peer((mess.get("ip"),mess.get("port")))
+                print(self.peer_list)
                 response = {
                     "action":"accept join",
-                    "result":True
+                    "result":True,
+                    "id": id
                 }
                 return response
             if mess.get("type") == "download":
@@ -178,11 +219,14 @@ class Tracker:
                 
                 
             if mess.get("type") == "upload":
-                self.add_peer((mess.get("ip"),mess.get("port")))
+                id = len(self.peer_list)
+                self.add_peer((mess.get("ip"), mess.get("port")))
+                print(self.peer_list)
                 response = {
                     "action":"response upload",
                     "metainfo_hash": mess.get("metainfo_hash"),
-                    "metainfo_name":mess.get("metainfo_name")
+                    "metainfo_name":mess.get("metainfo_name"),
+                    "id":id
                 }
                 return response
             
@@ -206,28 +250,9 @@ class Tracker:
         
     def response_action(self,connection,address,command: dict):
         if (command.get("action") == "response download"):
-            # print(json.dumps(command.get("peers"), indent=4))
             self.send_message(connection, command)
             return False
-        # self.send_message(connection,"oke")
-        if command.get("action") == "accept join":
-            response = {
-                "notification": "success" if command.get("result") else "failed"
-            }
-            self.send_message(connection, response)
-            return False
-            
-        if command.get("action") == "disconnect":
-            self.remove_peer(address)
-            # connected = False
-            return False
-            
-            
-        if command.get("action") == "error":
-            self.send_message(connection, command)
-            # connected = False
-            return False
-            
+        
         if command.get("action") == "response upload":
             metainfo_hash = command.get("metainfo_hash")
             metainfo_name = command.get("metainfo_name")
@@ -247,21 +272,48 @@ class Tracker:
                 self.update_metaifo_hash_table(metainfo_hash,f"{self.metainfo_storage}/{metainfo_name}")
             return False
                 
+        # self.send_message(connection,"oke")
+        if command.get("action") == "accept join":
+            if command.get("error"):
+                return command
+            
+            response = {
+                "notification": "success" if command.get("result") else "failed",
+                "id" : command.get("id")
+            }
+            self.send_message(connection, response)
+            return False
+            
+        if command.get("action") == "disconnect":
+            self.remove_peer(address)
+            # connected = False
+            return False
+            
+            
+        if command.get("action") == "error":
+            self.send_message(connection, command)
+            # connected = False
+            return False
+            
+       
                 
                 
         
     def findPeersGetTorrent(self,metainfo):
         print("[Broadcast] find peers which obtain Torrent pieces in peer list")
         peer_list_for_client = []
+        file_name = metainfo.get("info").get("name") 
         # print(self.peer_list)
         for peer in self.peer_list:
-            print(f"[ASK] Peer {peer} for torrent ")
+            
+            print( f"[ASK] Peer {peer} about torren of file { file_name } ")
             client_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_connection.connect(peer)
+            # client_connection.settimeout(60)
             message = {
                 "type": "findTorrent",
-                "tracker_id": self.id,
-                "file_name": metainfo.get("info").get("name")
+                # "tracker_id": self.id,
+                "file_name": file_name
             }
             
             self.send_message(client_connection, message)
@@ -270,6 +322,9 @@ class Tracker:
             if response.get("hit") == True:
                 peer_list_for_client.append({"id":response.get("id"),"ip":response.get("ip"), "port":response.get("port")})
             client_connection.close()
+            # except:
+            #     print(f"[ASK Timeout] ")
+            #     client_connection.close()
         return peer_list_for_client
                         
 
@@ -289,20 +344,18 @@ def test_meta_info():
 
 def main():
     parser = argparse.ArgumentParser(description='Tracker script')
-    parser.add_argument("--id", type=int, help="traker id",default=0)
     parser.add_argument("--port",type=int,help="tracker port", default=5050 )
     parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
     parser.add_argument("--header-length",type=int, help="header length of message", default=1024 )
     args = parser.parse_args()
     # for key, value in vars(args).items():
     #     print(f"{key}: {value}")
-    id = args.id
     port = args.port
     metainfo_storage = args.metainfo_storage
     header_length = args.header_length
     
     
-    tracker = Tracker(id=id,port = port, metainfo_storage=metainfo_storage,header_length= header_length)
+    tracker = Tracker(port = port, metainfo_storage=metainfo_storage,header_length= header_length)
     tracker.start()
     
 if __name__ == "__main__":
