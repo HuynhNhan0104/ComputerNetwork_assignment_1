@@ -49,8 +49,8 @@ class Peer():
         """
         print("[STARTING] PEER is starting ...")
         while True:
-           connection, address = self.socket_peer.accept()
-           thread = threading.Thread(target=self.handle_peer, args=(connection, address))
+        #    connection, address = 
+           thread = threading.Thread(target=self.handle_peer, args=(self.socket_peer.accept()))
            thread.daemon = True
            print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
            thread.start()  
@@ -70,9 +70,9 @@ class Peer():
         
     def join_network(self):
         message = {
-            "type":"join",
-            "ip":self.ip,
-            "port":self.port
+            "type": "join",
+            "ip": self.ip,
+            "port": self.port
         }
         tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tracker_connection.connect((self.tracker_ip,self.tracker_port))
@@ -506,9 +506,10 @@ class Peer():
         if sorted(pieces_downloaded) == sorted(piece_list):
             print(f"[DOWNLOAD] Get full piece of {file_name} ")
             # with self.write_file_semaphore:
-            merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/{file_name}.{extension}")
+            merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"{self.output_storage}/{file_name}.{extension}")
         else:
             print(f"[DOWNLOAD] Dont get full piece of {file_name} therefore cannot merge file")
+            
         print("_______________________DONE___________________________________")
         
         
@@ -550,11 +551,11 @@ class Peer():
             "metainfo_hash": metainfo_hash,
             "metainfo_name": metainfo_name
         }
-        
         tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tracker_connection.connect((self.tracker_ip,self.tracker_port))
         self.send_message(tracker_connection,request)
         response = self.recieve_message(tracker_connection)
+        print(response)
         # print(json.dumps(response,indent=4))
         if not response.get("hit"):
             print(f"[UPLOAD] Sending {metainfo_name} to tracker")
@@ -618,48 +619,6 @@ def download_peer_test():
     
 
 ################################################################################################
-running = True
-
-def process_command(peer, command):
-    global running
-    try:
-        command = command.strip()
-        command = command.split(" ")
-        print(command)
-        type_command = command[0]
-        print(type_command)
-        if type_command.lower() == "stop":
-            running = False
-        
-        if type_command.lower() == "download":
-            args = command[1:]
-            print(args)
-            download_thread = threading.Thread(target=peer.download_files, args=(args,))
-            download_thread.daemon = True
-            download_thread.start
-            
-            
-            
-        if type_command.lower() == "upload":
-            args = command[1:]
-            print(args)
-            upload_thread = threading.Thread(target=peer.upload_files, args=(args,("192.168.99.252",5050)))
-            upload_thread.daemon = True
-            upload_thread.start()
-        
-        
-    except Exception as e:
-        print(e)
-        pass
-    
-    
-    
-def command_listen(peer):
-    command = input("[Command] ")
-    
-    
-    process_command(peer,command)
-
 def main():
     parser = argparse.ArgumentParser(description='Peer script')
     parser.add_argument("--port",type=int,help="Peer port", default=4040 )
@@ -724,22 +683,15 @@ def main():
 
 if __name__ == "__main__":
     # peer = Peer(
-    #     port = 4040, 
+    #     port = 4041, 
     #     metainfo_storage = "metainfo1",
-    #     pieces_storage = "piece1",
-    #     output_storage = "output1",
+    #     pieces_storage = "piece",
+    #     output_storage = "output",
     #     header_length = 1024
     # )
-    # # peer.start()
+    # peer.start()
     
-    # # upload_peer_test()
+    # upload_peer_test()
     
-    # # download_peer_test()
-    # # main()
-    # command_thread = threading.Thread(target=command_listen,args=(peer,))
-    # command_thread.daemon = True  # Thiết lập luồng là daemon để tự động kết thúc khi chương trình chính kết thúc
-    # command_thread.start()
-    
-    # while running:
-    #     pass
+    # download_peer_test()
     main()

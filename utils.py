@@ -75,13 +75,16 @@ def merge_file_from_pieces(file_paths, output_file_path):
         
         file_paths = [(file_paths+ "/" + file_name) for file_name in file_name_list]
         # print(file_paths)
-    print(f"[MERGE PIECE] create output file:{output_file_path}")
+    print(f"[MERGE PIECE] create output file: { output_file_path}")
     with open(output_file_path,"ab") as out:
-        for file_path in file_paths:
-            with open(file_path,"rb") as item:
-                data = item.read(PIECE_LENGTH)
-                out.write(data)
-                
+        try:
+            for file_path in file_paths:
+                with open(file_path,"rb") as item:
+                    data = item.read(PIECE_LENGTH)
+                    out.write(data)
+        except Exception as e:
+            print(e)
+                    
 ###################################
 def create_hash_key_metainfo(file):
     with open(file, "rb") as torrent:
