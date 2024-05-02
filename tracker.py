@@ -30,19 +30,24 @@ class Tracker:
         print("[STARTING] Server is starting ...")
         while self.running:
             try:
-                connection, address = self.socket_tracker.accept()
-                thread = threading.Thread(target=self.handle_peer, args=(connection, address))
-                print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
-                thread.start()    
+                while self.running:
+                    connection, address = self.socket_tracker.accept()
+                    thread = threading.Thread(target=self.handle_peer, args=(connection, address))
+                    print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
+                    thread.start()    
             except KeyboardInterrupt:
                 # connection.close()
+                print("[STOPPING] Server is stopping ...")
+                self.running = False
+                self.socket_tracker.close()
+                print("[STOPPED] Server stopped successfully.")
                 break
             
     def handle_peer(self, connection, address):
         print(f"[NEW CONNECTION] {address} connected")
         message = self.recieve_message(connection, address)
         response = self.process_message(message)
-        connected = self.response_action(connection,address, response)    
+        self.response_action(connection,address, response)    
         connection.close()
         
         

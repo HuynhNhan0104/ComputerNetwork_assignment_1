@@ -51,6 +51,7 @@ class Peer():
         while True:
            connection, address = self.socket_peer.accept()
            thread = threading.Thread(target=self.handle_peer, args=(connection, address))
+           thread.daemon = True
            print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
            thread.start()  
            
@@ -60,7 +61,6 @@ class Peer():
         recieve -> process message -> action
         """
         print(f"[NEW CONNECTION] {address} connected")
-        connected = True
         self.add_peer(peer = address)
         message =  self.recieve_message(connection,address)
         response = self.process_message(message)
@@ -120,8 +120,6 @@ class Peer():
                 response = {
                     "id":self.id,
                     "action":"response download pieces",
-                    "am_choking":am_choking,
-                    "am_interested":am_interested,
                     "pieces": pieces
                 }
                 return response
@@ -129,7 +127,6 @@ class Peer():
                 
                 response = {
                     "action":"response download pieces",
-                    "am_choking":am_choking,
                 }
                 
                 return response
@@ -312,7 +309,7 @@ class Peer():
             chunk (int, optional): chunk size. Defaults to 512*1024 (521kB)
             
         """
-
+        message = self.recieve_message(connection)
         file_name = message.get("file_name")
         print(f"[RECIEVING PIECE]:{file_name}")
         
@@ -450,7 +447,6 @@ class Peer():
         annouce = metainfo.get("announce")
         annouce = annouce.split(":")
         tracker_ip = annouce[0]
-        print(tracker_ip)
         tracker_port = int(annouce[1])
         file_path = metainfo.get("info").get("name").split(".")
         file_name = file_path[0]
@@ -621,9 +617,48 @@ def download_peer_test():
     peer.download_files(list_down)
     
 
+################################################################################################
+running = True
 
-
-
+def process_command(peer, command):
+    global running
+    try:
+        command = command.strip()
+        command = command.split(" ")
+        print(command)
+        type_command = command[0]
+        print(type_command)
+        if type_command.lower() == "stop":
+            running = False
+        
+        if type_command.lower() == "download":
+            args = command[1:]
+            print(args)
+            download_thread = threading.Thread(target=peer.download_files, args=(args,))
+            download_thread.daemon = True
+            download_thread.start
+            
+            
+            
+        if type_command.lower() == "upload":
+            args = command[1:]
+            print(args)
+            upload_thread = threading.Thread(target=peer.upload_files, args=(args,("192.168.99.252",5050)))
+            upload_thread.daemon = True
+            upload_thread.start()
+        
+        
+    except Exception as e:
+        print(e)
+        pass
+    
+    
+    
+def command_listen(peer):
+    command = input("[Command] ")
+    
+    
+    process_command(peer,command)
 
 def main():
     parser = argparse.ArgumentParser(description='Peer script')
@@ -682,10 +717,29 @@ def main():
     if upload:
         upload_thread.join()
         peer.start()
+  
     
-    
+
+
+
 if __name__ == "__main__":
-    # upload_peer_test()
+    # peer = Peer(
+    #     port = 4040, 
+    #     metainfo_storage = "metainfo1",
+    #     pieces_storage = "piece1",
+    #     output_storage = "output1",
+    #     header_length = 1024
+    # )
+    # # peer.start()
     
-    # download_peer_test()
+    # # upload_peer_test()
+    
+    # # download_peer_test()
+    # # main()
+    # command_thread = threading.Thread(target=command_listen,args=(peer,))
+    # command_thread.daemon = True  # Thiết lập luồng là daemon để tự động kết thúc khi chương trình chính kết thúc
+    # command_thread.start()
+    
+    # while running:
+    #     pass
     main()
