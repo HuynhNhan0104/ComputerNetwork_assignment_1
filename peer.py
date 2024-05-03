@@ -4,16 +4,18 @@ import json
 import os
 import sys
 import time
+import hashlib
+
 import argparse
 from utils import merge_file_from_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, create_torrent, create_pieces_directory
 
 class Peer():
-    def __init__(self, port:int= 4040, peer_list:set = set(), header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "192.168.99.252"
+    def __init__(self, port:int = 4040, peer_list:set = set(), header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
+        self.tracker_ip = "192.168.243.252"
         self.tracker_port= 5050
-        self.id = -1
-        self.ip = "192.168.99.252"
+        self.ip = "192.168.243.252"
         self.port = port
+        self.id = hashlib.sha1(f"{self.ip}:{self.port}".encode()).hexdigest()
         self.peer_list = peer_list
         self.header_length = header_length
         self.pieces_storage = pieces_storage
@@ -42,13 +44,36 @@ class Peer():
         self.socket_peer.bind((self.ip,self.port))
         self.socket_peer.listen(10)
         print(f"[PEER] Socket is binded to {self.port}")
+        self.running  = True
+        # self.run()
+        
+    def run(self):
+        thread = threading.Thread(target=self.start)
+        thread.daemon = True
+        thread.start()
+        while True:
+            try:
+                time.sleep(1)
+            except KeyboardInterrupt:
+                self.running = False
+                message = {
+                    "type":"disconnect",
+                    "id": self.id,
+                    "ip": self.ip,
+                    "port":self.port
+                }
+                tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                tracker_connection.connect((self.tracker_ip,self.tracker_port))
+                self.send_message(tracker_connection,message)
+                print("exit")
+                break
     
     def start(self):
         """
         Stating listen, if recieve connecttion request then creating thread handle peer
         """
         print("[STARTING] PEER is starting ...")
-        while True:
+        while self.running:
         #    connection, address = 
            thread = threading.Thread(target=self.handle_peer, args=(self.socket_peer.accept()))
            thread.daemon = True
@@ -71,6 +96,7 @@ class Peer():
     def join_network(self):
         message = {
             "type": "join",
+            "id": self.id,
             "ip": self.ip,
             "port": self.port
         }
@@ -118,7 +144,7 @@ class Peer():
                 file_name = mess.get("file_name")
                 pieces = get_piece_list_of_file(file_name,self.pieces_storage)   
                 response = {
-                    "id":self.id,
+                    "id": self.id,
                     "action":"response download pieces",
                     "pieces": pieces
                 }
@@ -136,7 +162,7 @@ class Peer():
             chunk_size = mess.get("chunk")
             name = mess.get("file_name") 
             response = {
-                "id":self.id,
+                "id": self.id,
                 "action":"upload pieces",
                 "pieces_dicrectory": "pieces",
                 "file_name":name,
@@ -543,7 +569,7 @@ class Peer():
     def upload_request(self,metainfo_hash,metainfo_name):
         request = {
             "type":"upload",
-            # "id": self.id,
+            "id": self.id,
             "ip": self.ip,
             "port": self.port,
             "upload": self.upload,
@@ -675,7 +701,7 @@ def main():
         
     if upload:
         upload_thread.join()
-        peer.start()
+        peer.run()
   
     
 

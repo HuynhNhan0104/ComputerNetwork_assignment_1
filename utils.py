@@ -175,20 +175,9 @@ def test_torrent():
 
 if __name__ == "__main__":
     # test_split_file_to_pieces(file_path,"pieces/movie","mv_part")
-    # merge_file_from_pieces("pieces/movie","metainfo/my_movie.mp4")
-    # test_torrent()
-    # print(get_file_name_pieces_directory())
-    # create_pieces_directory("input/test.mp4")
-    
-    # print(get_piece_list_of_file("meeting_1.mp4"))
-    # create_pieces_directory("input/test.mp4")
-    # merge_file_from_pieces("pieces1/walking",output_file_path="input/walking.mp4")
-    # print(create_hash_key_metainfo("metainfo/test.torrent.json"))
-    with open("test.txt","r") as file:
-        while True:
-            data = file.read(4)
-            if not data:
-                break
-            print(len(data))
-            print(data)
-    
+    set_a = set()
+    item = ('2aa0825b578ea3450555bb1f97d79bdd729a5715', '192.168.243.252', 4041)
+    set_a.add(item)
+    print(set_a)
+    set_a.discard(item)
+    print(set_a)

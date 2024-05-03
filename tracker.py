@@ -2,14 +2,18 @@ import socket
 import threading
 import json
 import os
+import time
 from utils import create_metainfo_hashtable
 import argparse
+import hashlib
+import sys
 # https://www.geeksforgeeks.org/file-transfer-using-tcp-socket-in-python/
 
 class Tracker:
     def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
-        self.ip = "192.168.99.252"
+        self.ip = "192.168.243.252"
         self.port = port
+        self.id = hashlib.sha1(f"{self.ip}:{self.port}".encode()).hexdigest()
         self.header_length = header_length
         self.peer_list = set(peer_list)
         self.metainfo_storage = metainfo_storage
@@ -24,24 +28,31 @@ class Tracker:
         self.metainfo_hashtable_semaphore = threading.Semaphore()
         print(f"[TRACKER] Socket is binded to {self.port}")
         self.running = True
-    
+        self.run()
+        
+    def run(self):
+        thread = threading.Thread(target=self.start)
+        thread.daemon = True
+        thread.start()
+        while True:
+            try:
+                # print("still working")
+                time.sleep(1)
+            except KeyboardInterrupt:
+                # self.socket_tracker.close()
+                self.running = False
+                # sys.exit()
+                print("EXIT")
+                break
         
     def start(self):
         print("[STARTING] Server is starting ...")
         while self.running:
-            try:
-                while self.running:
-                    connection, address = self.socket_tracker.accept()
-                    thread = threading.Thread(target=self.handle_peer, args=(connection, address))
-                    print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
-                    thread.start()    
-            except KeyboardInterrupt:
-                # connection.close()
-                print("[STOPPING] Server is stopping ...")
-                self.running = False
-                self.socket_tracker.close()
-                print("[STOPPED] Server stopped successfully.")
-                break
+            connection, address = self.socket_tracker.accept()
+            thread = threading.Thread(target=self.handle_peer, args=(connection, address))
+            thread.daemon = True
+            print(f"[ACTIVE CONNECTION] {threading.active_count() - 1}")
+            thread.start()    
             
     def handle_peer(self, connection, address):
         print(f"[NEW CONNECTION] {address} connected")
@@ -66,6 +77,7 @@ class Tracker:
             try:
                 print(f"[TRACKER] Add peer {peer} to list tracking")
                 self.peer_list.add(peer)
+                print(self.peer_list)
             except Exception as e:
                 print(e)
                 
@@ -74,8 +86,9 @@ class Tracker:
         with self.peer_list_semaphore:
             try:
                 print(f"[TRACKER] remove peer {peer} in list tracking")
-            
-                self.peer_list.discard(peer)
+                if self.peer_list:
+                    self.peer_list.discard(peer)
+                print(self.peer_list)
             except Exception as e:
                 print(e)
     
@@ -188,13 +201,11 @@ class Tracker:
     def process_message(self, mess)-> str:
         try:
             if mess.get("type") == "join":
-                id = len(self.peer_list)
-                self.add_peer((mess.get("ip"),mess.get("port")))
-                print(self.peer_list)
+                peer = (mess.get("id"),mess.get("ip"),mess.get("port"))
+                self.add_peer(peer)
                 response = {
                     "action":"accept join",
                     "result":True,
-                    "id": id
                 }
                 return response
             if mess.get("type") == "download":
@@ -221,8 +232,7 @@ class Tracker:
                 
             if mess.get("type") == "upload":
                 id = len(self.peer_list)
-                self.add_peer((mess.get("ip"), mess.get("port")))
-                print(self.peer_list)
+                self.add_peer((mess.get("id"),mess.get("ip"), mess.get("port")))
                 response = {
                     "action":"response upload",
                     "metainfo_hash": mess.get("metainfo_hash"),
@@ -234,7 +244,7 @@ class Tracker:
             if mess.get("type") == "disconnect":
                 response = {
                     "action":"disconnect",
-                    "id":mess.get("ip"),
+                    "id":mess.get("id"),
                     "ip":mess.get("ip"),
                     "port":mess.get("port")
                 }
@@ -252,6 +262,8 @@ class Tracker:
     def response_action(self,connection,address,command: dict):
         if (command.get("action") == "response download"):
             self.send_message(connection, command)
+            print(f"[TRACKER] Response peer need to contact")
+            print(json.dumps(command,indent=4))
             return False
         
         if command.get("action") == "response upload":
@@ -286,7 +298,9 @@ class Tracker:
             return False
             
         if command.get("action") == "disconnect":
-            self.remove_peer(address)
+            peer = (command.get("id"),command.get("ip"),command.get("port"))
+            print(peer)
+            self.remove_peer(peer)
             # connected = False
             return False
             
@@ -309,11 +323,11 @@ class Tracker:
             
             print( f"[ASK] Peer {peer} about torren of file { file_name } ")
             client_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_connection.connect(peer)
+            client_connection.connect((peer[1],peer[2]))
             # client_connection.settimeout(60)
             message = {
                 "type": "findTorrent",
-                # "tracker_id": self.id,
+                "tracker_id": self.id,
                 "file_name": file_name
             }
             
@@ -326,6 +340,7 @@ class Tracker:
             # except:
             #     print(f"[ASK Timeout] ")
             #     client_connection.close()
+        print(peer_list_for_client)
         return peer_list_for_client
                         
 
@@ -356,8 +371,8 @@ def main():
     header_length = args.header_length
     
     
-    tracker = Tracker(port = port, metainfo_storage=metainfo_storage,header_length= header_length)
-    tracker.start()
+    tracker = Tracker(port = port, metainfo_storage= metainfo_storage, header_length= header_length)
+    # tracker.start()
     
 if __name__ == "__main__":
     main()
