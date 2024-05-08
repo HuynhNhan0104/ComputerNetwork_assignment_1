@@ -224,8 +224,8 @@ class Peer():
             # data = json.loads(data)
             # print(data)
             data = decoder.decode(data)
-            print(type(data))
-            print(data)
+            # print(type(data))
+            # print(data)
             return data 
                 
     
