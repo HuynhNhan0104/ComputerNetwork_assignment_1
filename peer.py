@@ -468,7 +468,7 @@ class Peer():
         self.recieve_list_pieces(peer_connection,pieces_list,file_name,chunk)
         
             
-    def download_torrent(self,metainfo_path):
+    def download_file(self,metainfo_path):
         metainfo = self.parse_metainfo(metainfo_path)
         annouce = metainfo.get("announce")
         annouce = annouce.split(":")
@@ -556,7 +556,7 @@ class Peer():
         
         for metainfo_file in metainfo_path_list:
             # print(metainfo_file)
-            thread = threading.Thread(target=self.download_torrent, args=(metainfo_file,))
+            thread = threading.Thread(target=self.download_file, args=(metainfo_file,))
             thread_list.append(thread)
             thread.start()
         
@@ -651,7 +651,8 @@ def main():
     parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
     parser.add_argument("--pieces-storage",type=str, help="directory hold pieces", default="pieces" )
     parser.add_argument("--output-storage",type=str, help="directory hold output file", default="output" )
-    
+    parser.add_argument("--become-seeder", action="store_true", help="become seeder when download")
+
     
     parser.add_argument("--header-length",type=int, help="header length of message", default=1024 )
     parser.add_argument("--download",nargs="+", help="list file want to download")
@@ -668,6 +669,8 @@ def main():
     metainfo_storage = args.metainfo_storage
     pieces_storage = args.pieces_storage
     output_storage = args.output_storage
+    become_seeder = args.become_seeder
+    
     header_length = args.header_length
     download = args.download
     upload = args.upload

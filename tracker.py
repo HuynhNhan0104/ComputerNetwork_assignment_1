@@ -138,7 +138,7 @@ class Tracker:
 
         return json.loads(message)
    
-    def send_metainfo_file(self, connection,file_path,chunk= 512*1024):
+    def send_file(self, connection,file_path,chunk= 512*1024):
         """
         send all data of file to other peer which is connected with
 
@@ -164,7 +164,7 @@ class Tracker:
             except Exception as e:
                 print(e)
        
-    def recieve_metainfo_file(self,connection, out_path,chunk=1024, test = 0):
+    def recieve_file(self,connection, out_path,chunk=1024, test = 0):
         """
         recieve file from other peer which is connected with
 
@@ -222,7 +222,7 @@ class Tracker:
                     }
                     return response
                 # send broadcast to ask all peer in list to find who is keept pieces of this file
-                peer_list_response = self.findPeersGetTorrent(meta_info)
+                peer_list_response = self.find_peers_hold_Torrent(meta_info)
                 response = {
                     "action":"response download",
                     "peers": peer_list_response
@@ -281,7 +281,7 @@ class Tracker:
                     "hit": False
                 }
                 self.send_message(connection, response)
-                self.recieve_metainfo_file(connection,f"{self.metainfo_storage}/{metainfo_name}",chunk=1024)
+                self.recieve_file(connection,f"{self.metainfo_storage}/{metainfo_name}",chunk=1024)
                 self.update_metaifo_hash_table(metainfo_hash,f"{self.metainfo_storage}/{metainfo_name}")
             return False
                 
@@ -314,7 +314,7 @@ class Tracker:
                 
                 
         
-    def findPeersGetTorrent(self,metainfo):
+    def find_peers_hold_Torrent(self,metainfo):
         print("[Broadcast] find peers which obtain Torrent pieces in peer list")
         peer_list_for_client = []
         file_name = metainfo.get("info").get("name") 
