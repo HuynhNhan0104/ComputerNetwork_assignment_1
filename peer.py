@@ -5,15 +5,16 @@ import os
 import sys
 import time
 import hashlib
+import bencodepy
 
 import argparse
 from utils import merge_file_from_pieces, create_hash_key_metainfo ,get_files_in_pieces_directory, get_piece_list_of_file, create_torrent, create_pieces_directory
 
 class Peer():
-    def __init__(self, port:int = 4040, peer_list:set = set(), header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output") -> None:
-        self.tracker_ip = "192.168.243.252"
-        self.tracker_port= 5050
-        self.ip = "192.168.243.252"
+    def __init__(self, ip, port:int = 4040, peer_list:set = set(), header_length = 1024,pieces_storage="pieces", metainfo_storage ="metainfo", output_storage = "output",tracker_ip = "",tracker_port ="" ) -> None:
+        self.tracker_ip = tracker_ip
+        self.tracker_port= tracker_port
+        self.ip = ip
         self.port = port
         self.id = hashlib.sha1(f"{self.ip}:{self.port}".encode()).hexdigest()
         self.peer_list = peer_list
@@ -215,9 +216,16 @@ class Peer():
         return True
       
     def parse_metainfo(self,metainfo) -> dict:
+        decoder = bencodepy.Bencode(
+            encoding='utf-8'
+        )
         with open(metainfo,"r") as torrent:
             data = torrent.read()
-            data = json.loads(data)
+            # data = json.loads(data)
+            # print(data)
+            data = decoder.decode(data)
+            print(type(data))
+            print(data)
             return data 
                 
     
@@ -495,7 +503,7 @@ class Peer():
             merge_file_from_pieces(f"{self.pieces_storage}/{file_name}",f"output/{file_name}.{extension}")
             return
         peer_list = self.get_peer_list_from_tracker(metainfo_path,tracker_ip,tracker_port)
-        # print(peer_list)
+        print(peer_list)
         
         
         if not peer_list:
@@ -577,7 +585,7 @@ class Peer():
             "metainfo_hash": metainfo_hash,
             "metainfo_name": metainfo_name
         }
-        tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tracker_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)        
         tracker_connection.connect((self.tracker_ip,self.tracker_port))
         self.send_message(tracker_connection,request)
         response = self.recieve_message(tracker_connection)
@@ -597,7 +605,7 @@ class Peer():
         # upload meta info file to tracker. 
         create_pieces_directory(file_share,self.pieces_storage)
         file_name = os.path.basename(file_share)
-        file_name = file_name.split(".")[0] + ".torrent.json"
+        file_name = file_name.split(".")[0] + ".torrent"
         output_path = f"{self.metainfo_storage}/{file_name}"
         # print(file_name)
         metainfo_hash = create_torrent(file_share, f"{tracker_address[0]}:{tracker_address[1]}",output_path)
@@ -647,6 +655,7 @@ def download_peer_test():
 ################################################################################################
 def main():
     parser = argparse.ArgumentParser(description='Peer script')
+    parser.add_argument("--ip", type=str ,help="Peer ip" )
     parser.add_argument("--port",type=int,help="Peer port", default=4040 )
     parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
     parser.add_argument("--pieces-storage",type=str, help="directory hold pieces", default="pieces" )
@@ -663,8 +672,9 @@ def main():
     
     args = parser.parse_args()
     
-    # for key, value in vars(args).items():
-    #     print(f"{key}: {value}")
+    for key, value in vars(args).items():
+        print(f"{key}: {value}")
+    ip = args.ip
     port = args.port
     metainfo_storage = args.metainfo_storage
     pieces_storage = args.pieces_storage
@@ -679,11 +689,14 @@ def main():
     
     
     peer = Peer(
+        ip = ip,
         port = port, 
         metainfo_storage = metainfo_storage,
         pieces_storage = pieces_storage,
         output_storage = output_storage,
-        header_length = header_length
+        header_length = header_length,
+        tracker_ip=tracker_ip,
+        tracker_port=tracker_port
     )
     
     download_thread = None

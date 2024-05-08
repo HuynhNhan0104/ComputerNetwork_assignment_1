@@ -1,6 +1,6 @@
 import os
 import hashlib
-import bencodepy  # You'll need to install this library: pip install bencodepy
+import bencode
 import json
 ###################################################################3
 # 512KB piece size
@@ -40,11 +40,13 @@ def create_torrent(file_path, tracker_url, output_file):
     
 
     # Encode the torrent dictionary using bencode
-    # encoded_torrent = bencodepy.encode(torrent_data)
+    encoded_torrent = bencodepy.encode(torrent_data)
 
     # # Write the encoded torrent data to a file
-    with open(output_file, 'w') as f:
-        f.write(json.dumps(torrent_data,indent = 4))
+    with open(output_file, 'wb') as f:
+        # f.write(json.dumps(torrent_data,indent = 4))
+        f.write(encoded_torrent)
+        
     
     
     return create_hash_key_metainfo(output_file)
@@ -171,13 +173,14 @@ def test_torrent():
 
     create_torrent(file_path, tracker_url, output_file)
     
-
+import bencodepy
 
 if __name__ == "__main__":
-    # test_split_file_to_pieces(file_path,"pieces/movie","mv_part")
-    set_a = set()
-    item = ('2aa0825b578ea3450555bb1f97d79bdd729a5715', '192.168.243.252', 4041)
-    set_a.add(item)
-    print(set_a)
-    set_a.discard(item)
-    print(set_a)
+    # test_split_file_to_pieces(file_path,"pieces/movie","mv_part"
+    
+
+    bc = bencodepy.Bencode(
+        encoding='utf-8'
+    )
+
+    print(bc.decode('d5:title7:Examplee'))

@@ -5,13 +5,16 @@ import os
 import time
 from utils import create_metainfo_hashtable
 import argparse
+import bencodepy
+
+
 import hashlib
 import sys
 # https://www.geeksforgeeks.org/file-transfer-using-tcp-socket-in-python/
 
 class Tracker:
-    def __init__(self, port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
-        self.ip = "192.168.243.252"
+    def __init__(self, ip,port:int =5050, peer_list:set = {}, header_length = 1024,metainfo_storage="metainfo") -> None:
+        self.ip = ip
         self.port = port
         self.id = hashlib.sha1(f"{self.ip}:{self.port}".encode()).hexdigest()
         self.header_length = header_length
@@ -63,11 +66,16 @@ class Tracker:
         
         
     def parse_metainfo(self,hash_info) -> dict:
+        decoder = bencodepy.Bencode(
+            encoding='utf-8'
+        )
         metainfo_path = self.metainfo_hashtable.get(hash_info)
         if metainfo_path:
             with open(metainfo_path, "r") as torrent:
                 metainfo = torrent.read()
-                metainfo = json.loads(metainfo)
+                # metainfo = json.loads(metainfo)
+                # metainfo = bencodepy.decode(metainfo)
+                metainfo = decoder.decode(metainfo)
                 return metainfo
         else:
             return None
@@ -200,6 +208,7 @@ class Tracker:
      
     def process_message(self, mess)-> str:
         try:
+            print(mess)
             if mess.get("type") == "join":
                 peer = (mess.get("id"),mess.get("ip"),mess.get("port"))
                 self.add_peer(peer)
@@ -215,6 +224,7 @@ class Tracker:
                 metainfo_hash = mess.get("metainfo_hash")
                 # parse metainfo from hash of metainfo
                 meta_info = self.parse_metainfo(metainfo_hash)
+                
                 if not meta_info:
                     response = {
                         "action":"error",
@@ -360,18 +370,20 @@ def test_meta_info():
 
 def main():
     parser = argparse.ArgumentParser(description='Tracker script')
+    parser.add_argument("--ip",type=str,help="tracker ip")
     parser.add_argument("--port",type=int,help="tracker port", default=5050 )
     parser.add_argument("--metainfo-storage",type=str, help="directory hold metainfo", default="metainfo" )
     parser.add_argument("--header-length",type=int, help="header length of message", default=1024 )
     args = parser.parse_args()
     # for key, value in vars(args).items():
     #     print(f"{key}: {value}")
+    ip = args.ip
     port = args.port
     metainfo_storage = args.metainfo_storage
     header_length = args.header_length
     
     
-    tracker = Tracker(port = port, metainfo_storage= metainfo_storage, header_length= header_length)
+    tracker = Tracker(ip= ip,port = port, metainfo_storage= metainfo_storage, header_length= header_length)
     # tracker.start()
     
 if __name__ == "__main__":
