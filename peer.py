@@ -703,6 +703,7 @@ def main():
     if download:
         download_thread = threading.Thread(target=peer.download_files, args=(download,))
         download_thread.start()
+        
     
     
     upload_thread = None
@@ -714,6 +715,8 @@ def main():
     
     if download:
         download_thread.join()
+        if become_seeder:
+            peer.run()
         
     if upload:
         upload_thread.join()
