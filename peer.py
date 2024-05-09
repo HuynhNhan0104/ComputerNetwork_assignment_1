@@ -522,17 +522,17 @@ class Peer():
             return
             
             
-        for peer in piece_hold_by_peers:
-            self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
-        
-        # thread_list = []
         # for peer in piece_hold_by_peers:
-        #     thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
-        #     thread_list.append(thread_item)
-        #     thread_item.start()
+        #     self.download_pieces((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name)
         
-        # for thread in thread_list:
-        #     thread.join()
+        thread_list = []
+        for peer in piece_hold_by_peers:
+            thread_item = threading.Thread(target=self.download_pieces,args=((peer.get("ip"),peer.get("port")),peer.get("pieces"),file_name))
+            thread_list.append(thread_item)
+            thread_item.start()
+        
+        for thread in thread_list:
+            thread.join()
             
             
         
