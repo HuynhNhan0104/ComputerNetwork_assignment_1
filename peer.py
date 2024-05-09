@@ -22,6 +22,7 @@ class Peer():
         self.pieces_storage = pieces_storage
         self.metainfo_storage = metainfo_storage 
         self.output_storage = output_storage
+        self.file_download_semaphore = threading.Semaphore()
         
         if not os.path.exists(self.pieces_storage):
             os.makedirs(self.pieces_storage)
@@ -472,8 +473,9 @@ class Peer():
             "pieces":pieces_list,
             "chunk": chunk
         }
-        self.send_message(peer_connection, message)
-        self.recieve_list_pieces(peer_connection,pieces_list,file_name,chunk)
+        with self.file_download_semaphore:
+            self.send_message(peer_connection, message)
+            self.recieve_list_pieces(peer_connection,pieces_list,file_name,chunk)
         
             
     def download_file(self,metainfo_path):
